@@ -1,0 +1,2126 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Petualangan Digital: SMKN 1 Cilegon</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Three.js r128 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- Google Fonts: Inter -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    * {
+      font-family: 'Inter', sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+      box-sizing: border-box;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #0F172A;
+      touch-action: none;
+    }
+    #game-canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    /* Custom scrollbar for quiz explanation if needed */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #F1F5F9;
+      border-radius: 8px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #94A3B8;
+      border-radius: 8px;
+    }
+    @keyframes pulseGlow {
+      0%, 100% { transform: translate(-50%, 0) scale(1); }
+      50% { transform: translate(-50%, -4px) scale(1.03); }
+    }
+    .animate-prompt {
+      animation: pulseGlow 1.6s infinite ease-in-out;
+    }
+  </style>
+</head>
+<body class="relative w-full h-full overflow-hidden">
+
+  <!-- 3D WebGL Canvas -->
+  <canvas id="game-canvas"></canvas>
+
+  <!-- Floating 2D Screen Labels Container for NPCs -->
+  <div id="npc-labels-layer" class="pointer-events-none fixed inset-0 overflow-hidden z-10"></div>
+
+  <!-- =========================================================
+       HUD OVERLAY (DITAMPILKAN SAAT EKSPLORASI)
+  ========================================================== -->
+  <div id="hud-overlay" class="hidden fixed inset-0 pointer-events-none z-20 p-3 sm:p-5 flex flex-col justify-between">
+    
+    <!-- Top Bar: Student Info & Score (Left) + Radar & Sound (Right) -->
+    <div class="flex items-start justify-between gap-3">
+      <!-- Top-Left Card -->
+      <div class="pointer-events-auto bg-white/95 backdrop-blur-md border border-slate-200/80 shadow-lg rounded-2xl p-3 sm:p-4 max-w-[240px] sm:max-w-xs">
+        <div class="flex items-center gap-2.5 mb-2">
+          <div class="w-9 h-9 rounded-xl bg-blue-900 text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-sm">
+            SMK
+          </div>
+          <div class="min-w-0">
+            <h2 id="hud-student-name" class="text-slate-900 font-bold text-sm sm:text-base truncate">Nama Siswa</h2>
+            <p id="hud-student-class" class="text-xs font-medium text-blue-600 truncate">Kelas XI BD 1</p>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
+          <div class="bg-slate-50 rounded-xl px-2.5 py-1.5 border border-slate-200/60">
+            <span class="block text-[10px] uppercase tracking-wider font-semibold text-slate-400">Skor</span>
+            <span id="hud-score" class="text-base sm:text-lg font-extrabold text-blue-700">0</span>
+            <span class="text-[11px] font-medium text-slate-400">/100</span>
+          </div>
+          <div class="bg-slate-50 rounded-xl px-2.5 py-1.5 border border-slate-200/60">
+            <span class="block text-[10px] uppercase tracking-wider font-semibold text-slate-400">Pos Misi</span>
+            <span id="hud-progress" class="text-base sm:text-lg font-extrabold text-emerald-600">0/4</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Top-Right Radar & Audio Toggle -->
+      <div class="flex flex-col items-end gap-2">
+        <div class="flex items-center gap-2">
+          <!-- Controls Hint Badge (Desktop) -->
+          <div class="hidden md:flex items-center gap-2 bg-slate-900/85 backdrop-blur-md text-white text-xs px-3.5 py-2 rounded-xl border border-slate-700/70 shadow-md">
+            <span class="px-1.5 py-0.5 bg-slate-700 rounded text-[11px] font-bold">WASD / Panah</span> Gerak
+            <span class="text-slate-500">•</span>
+            <span class="px-1.5 py-0.5 bg-slate-700 rounded text-[11px] font-bold">Drag Mouse</span> Kamera
+            <span class="text-slate-500">•</span>
+            <span class="px-1.5 py-0.5 bg-blue-600 rounded text-[11px] font-bold">E</span> Bicara
+          </div>
+
+          <!-- Mute / Unmute Button -->
+          <button id="btn-toggle-audio" title="Suara Efek" class="pointer-events-auto w-10 h-10 rounded-xl bg-white/95 hover:bg-slate-100 text-slate-800 border border-slate-200 shadow-lg flex items-center justify-center transition active:scale-95">
+            <!-- Volume On Icon -->
+            <svg id="icon-sound-on" class="w-5 h-5 text-blue-700" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M11 5L6 9H2v6h4l5 4V5zM15.54 8.46a5 5 0 010 7.07M19.07 4.93a10 10 0 010 14.14" />
+            </svg>
+            <!-- Volume Off Icon -->
+            <svg id="icon-sound-off" class="hidden w-5 h-5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M11 5L6 9H2v6h4l5 4V5zM23 9l-6 6M17 9l6 6" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- Mini Radar -->
+        <div class="pointer-events-auto bg-slate-900/90 backdrop-blur-md p-2 rounded-2xl border border-slate-700/80 shadow-xl">
+          <canvas id="radar-canvas" width="116" height="116" class="rounded-xl block"></canvas>
+          <div class="flex items-center justify-between text-[10px] text-slate-300 mt-1.5 px-1 font-medium">
+            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-amber-400 inline-block"></span>Aktif</span>
+            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-400 inline-block"></span>Selesai</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Center-Bottom Proximity Interaction Prompt -->
+    <div id="interaction-prompt" class="hidden fixed bottom-28 sm:bottom-12 left-1/2 -translate-x-1/2 z-30 pointer-events-auto animate-prompt">
+      <button id="btn-interact" class="flex items-center gap-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold px-5 py-3.5 rounded-2xl shadow-2xl border-2 border-white/90 transition cursor-pointer">
+        <span class="w-7 h-7 rounded-lg bg-white text-blue-700 font-extrabold text-sm flex items-center justify-center shadow-sm">E</span>
+        <span id="interaction-text" class="text-sm sm:text-base whitespace-nowrap">Bicara dengan Guru</span>
+      </button>
+    </div>
+
+    <!-- Bottom Controls for Touch / Mobile Devices -->
+    <div class="flex items-end justify-between w-full sm:hidden pb-1">
+      <!-- Virtual D-Pad / Joystick -->
+      <div id="touch-joystick-zone" class="pointer-events-auto relative w-28 h-28 rounded-full bg-slate-900/45 backdrop-blur-sm border-2 border-white/30 flex items-center justify-center">
+        <div id="touch-joystick-knob" class="w-11 h-11 rounded-full bg-white/90 shadow-lg border-2 border-blue-600 pointer-events-none transition-transform duration-75"></div>
+      </div>
+      <!-- Hint Swipe Camera -->
+      <div class="bg-slate-900/65 text-white/90 text-[11px] px-3 py-1.5 rounded-xl backdrop-blur-sm border border-white/15">
+        Geser layar untuk putar kamera
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       1. START SCREEN OVERLAY
+  ========================================================== -->
+  <div id="start-modal" class="fixed inset-0 z-40 bg-slate-900/75 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-md w-full overflow-hidden">
+      <!-- Header Banner -->
+      <div class="bg-gradient-to-br from-slate-900 via-blue-900 to-blue-700 p-6 sm:p-7 text-white relative overflow-hidden">
+        <div class="flex items-center justify-between gap-2 mb-3">
+          <div class="inline-flex items-center gap-2 bg-white/15 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-semibold tracking-wide border border-white/20">
+            <span>🎓</span> SIMULASI EDUKASI 3D • BISNIS DIGITAL
+          </div>
+          <!-- Teacher Protected Panel Trigger -->
+          <button
+            type="button"
+            id="btn-open-sheet-setup"
+            title="Panel Khusus Guru (Dilindungi PIN)"
+            class="inline-flex items-center gap-1.5 bg-white/15 hover:bg-white/25 text-white text-[11px] font-semibold px-2.5 py-1 rounded-full border border-white/25 transition cursor-pointer shrink-0"
+          >
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+            <span id="sheet-status-badge">Panel Guru</span>
+          </button>
+        </div>
+        <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight leading-tight">
+          Petualangan Digital:<br/>
+          <span class="text-amber-300">SMKN 1 Cilegon</span>
+        </h1>
+        <p class="text-blue-100 text-xs sm:text-sm mt-2 leading-relaxed">
+          Jelajahi lingkungan sekolah, temui 4 Guru Bisnis Digital di setiap pos, dan selesaikan tantangan kuis untuk meraih skor terbaik!
+        </p>
+      </div>
+
+      <!-- Teacher PIN Gate & Protected Setup Panel -->
+      <div id="sheet-setup-panel" class="hidden bg-slate-50 px-6 py-5 space-y-4 max-h-[65vh] overflow-y-auto">
+        <!-- Back to Student Menu Bar -->
+        <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+          <button
+            type="button"
+            id="btn-back-to-start"
+            class="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-blue-700 bg-white hover:bg-blue-50 px-3 py-1.5 rounded-xl border border-slate-200 transition cursor-pointer"
+          >
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+            <span>Kembali ke Menu Awal</span>
+          </button>
+          <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Panel Guru</span>
+        </div>
+
+        <!-- Step 1: PIN Verification Box -->
+        <div id="teacher-pin-gate" class="space-y-2.5">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+              🔒 Akses Khusus Guru Pengampu
+            </span>
+            <span class="text-[10px] font-semibold text-slate-500">PIN Default: 1945</span>
+          </div>
+          <p class="text-[11px] text-slate-500 leading-relaxed">
+            Masukkan PIN Guru untuk mengatur URL Google Sheet dan mengunggah bank soal kuis:
+          </p>
+          <div class="flex gap-2">
+            <input
+              type="password"
+              id="input-teacher-pin"
+              maxlength="12"
+              placeholder="Masukkan PIN Guru..."
+              class="flex-1 px-3 py-2 rounded-xl border border-slate-300 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
+            />
+            <button
+              type="button"
+              id="btn-verify-pin"
+              class="bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold px-4 py-2 rounded-xl transition cursor-pointer shrink-0"
+            >
+              Buka Kunci
+            </button>
+          </div>
+          <p id="pin-error-msg" class="hidden text-[11px] font-semibold text-red-600">
+            ❌ PIN salah. Hanya guru yang dapat membuka pengaturan ini.
+          </p>
+        </div>
+
+        <!-- Step 2: Unlocked Teacher Controls -->
+        <div id="teacher-unlocked-controls" class="hidden space-y-4">
+          <div class="flex items-center justify-between border-b border-slate-200 pb-2">
+            <span class="text-xs font-extrabold text-emerald-700">🔓 Mode Guru Aktif</span>
+            <button type="button" id="btn-lock-teacher" class="text-[11px] font-semibold text-slate-500 hover:text-slate-800 underline cursor-pointer">
+              Kunci Kembali
+            </button>
+          </div>
+
+          <!-- A. Google Sheet URL -->
+          <div class="space-y-1.5">
+            <div class="flex items-center justify-between">
+              <label class="text-xs font-bold text-slate-800">1. Link Google Sheet Guru</label>
+              <span class="text-[10px] font-medium text-blue-700">riazikryah71.@guru.smk.belajar.id</span>
+            </div>
+            <div class="flex gap-2">
+              <input
+                type="url"
+                id="input-sheet-url"
+                placeholder="https://script.google.com/macros/s/.../exec"
+                class="flex-1 px-3 py-2 rounded-xl border border-slate-300 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
+              />
+              <button
+                type="button"
+                id="btn-save-sheet-url"
+                class="bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition cursor-pointer shrink-0"
+              >
+                Simpan
+              </button>
+            </div>
+          </div>
+
+          <!-- B. Upload Soal (CSV / JSON) -->
+          <div class="space-y-2 pt-2 border-t border-slate-200">
+            <div class="flex items-center justify-between">
+              <label class="text-xs font-bold text-slate-800">2. Upload Bank Soal (CSV / JSON)</label>
+              <button type="button" id="btn-download-template" class="text-[11px] font-bold text-blue-600 hover:text-blue-800 underline cursor-pointer">
+                ⬇ Unduh Template CSV
+              </button>
+            </div>
+            <p class="text-[11px] text-slate-500 leading-relaxed">
+              Unggah file <strong>.csv</strong> (dari Excel/Google Sheets) atau <strong>.json</strong> untuk mengganti soal pada Pos 1–4 secara otomatis:
+            </p>
+            <div class="flex items-center gap-2">
+              <input
+                type="file"
+                id="input-upload-questions"
+                accept=".csv,.json"
+                class="block w-full text-xs text-slate-600 file:mr-2.5 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
+              />
+              <button type="button" id="btn-reset-questions" title="Kembalikan soal bawaan" class="text-[11px] font-semibold text-slate-500 hover:text-red-600 px-2 py-1.5 rounded-lg border border-slate-200 bg-white shrink-0 cursor-pointer">
+                Reset
+              </button>
+            </div>
+            <div id="question-bank-status" class="text-[11px] font-medium text-slate-600 bg-white px-3 py-2 rounded-xl border border-slate-200">
+              Bank Soal Aktif: <strong>Bawaan (8 Soal / 4 Pos)</strong>
+            </div>
+          </div>
+
+          <!-- C. Change Teacher PIN -->
+          <div class="space-y-1.5 pt-2 border-t border-slate-200">
+            <label class="text-xs font-bold text-slate-800">3. Ubah PIN Guru</label>
+            <div class="flex gap-2">
+              <input
+                type="text"
+                id="input-new-pin"
+                maxlength="12"
+                placeholder="PIN baru (misal: 2026)"
+                class="flex-1 px-3 py-1.5 rounded-xl border border-slate-300 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
+              />
+              <button type="button" id="btn-save-new-pin" class="bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold px-3 py-1.5 rounded-xl cursor-pointer">
+                Ganti PIN
+              </button>
+            </div>
+          </div>
+
+          <p id="sheet-setup-feedback" class="hidden text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2"></p>
+        </div>
+
+        <!-- Bottom Back Button inside Panel Guru -->
+        <div class="pt-2 border-t border-slate-200">
+          <button
+            type="button"
+            id="btn-back-to-start-bottom"
+            class="w-full bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs py-2.5 px-4 rounded-xl border border-slate-300 transition flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            <span>Kembali ke Menu Awal</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Form Input -->
+      <form id="start-form" class="p-6 sm:p-7 space-y-4">
+        <div>
+          <label for="input-name" class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+            Nama Lengkap Siswa
+          </label>
+          <input
+            type="text"
+            id="input-name"
+            required
+            maxlength="32"
+            placeholder="Contoh: Ahmad Fauzan"
+            class="w-full px-4 py-3 rounded-xl border border-slate-300 text-slate-900 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition"
+          />
+        </div>
+
+        <div>
+          <label for="input-class" class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+            Kelas / Jurusan
+          </label>
+          <input
+            type="text"
+            id="input-class"
+            required
+            maxlength="20"
+            placeholder="Contoh: XI BD 1"
+            class="w-full px-4 py-3 rounded-xl border border-slate-300 text-slate-900 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition"
+          />
+        </div>
+
+        <div id="start-error" class="hidden text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-xl px-3.5 py-2.5">
+          Mohon isi Nama Lengkap dan Kelas terlebih dahulu.
+        </div>
+
+        <button
+          type="submit"
+          class="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold py-3.5 px-6 rounded-xl shadow-lg shadow-blue-600/25 transition flex items-center justify-center gap-2 text-sm sm:text-base cursor-pointer"
+        >
+          <span>Mulai Petualangan</span>
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+          </svg>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       2. QUIZ MODAL (INTERAKSI DENGAN NPC GURU)
+  ========================================================== -->
+  <div id="quiz-modal" class="hidden fixed inset-0 z-40 bg-slate-900/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full overflow-hidden flex flex-col max-h-[92vh]">
+      
+      <!-- Royal Blue Header -->
+      <div class="bg-gradient-to-r from-blue-900 to-blue-600 px-6 py-4 text-white flex items-center justify-between">
+        <div>
+          <span id="quiz-topic-badge" class="inline-block text-[11px] font-bold uppercase tracking-wider bg-white/20 px-2.5 py-0.5 rounded-md mb-1">
+            Topik Materi
+          </span>
+          <h3 id="quiz-teacher-name" class="text-lg font-extrabold leading-snug">Bu Ria - Digital Branding</h3>
+        </div>
+        <div class="text-right shrink-0 ml-3">
+          <span class="block text-[11px] text-blue-200 font-medium">Pertanyaan</span>
+          <span id="quiz-q-counter" class="text-base font-extrabold bg-slate-900/40 px-3 py-1 rounded-xl inline-block mt-0.5">1 / 2</span>
+        </div>
+      </div>
+
+      <!-- Quiz Body -->
+      <div class="p-6 overflow-y-auto space-y-4">
+        <p id="quiz-question-text" class="text-slate-800 font-semibold text-base leading-relaxed">
+          Pertanyaan akan muncul di sini...
+        </p>
+
+        <!-- Options List -->
+        <div id="quiz-options-container" class="space-y-2.5">
+          <!-- Buttons injected by JS -->
+        </div>
+
+        <!-- Immediate Educational Feedback Box -->
+        <div id="quiz-feedback-box" class="hidden rounded-2xl p-4 border text-sm leading-relaxed">
+          <div class="flex items-center gap-2 font-bold mb-1" id="quiz-feedback-title">
+            <!-- Status title -->
+          </div>
+          <p id="quiz-feedback-desc" class="text-slate-700 text-xs sm:text-sm"></p>
+        </div>
+      </div>
+
+      <!-- Footer Actions -->
+      <div class="px-6 py-4 bg-slate-50 border-t border-slate-200/80 flex items-center justify-between gap-3">
+        <button id="btn-close-quiz" type="button" class="text-xs sm:text-sm font-semibold text-slate-500 hover:text-slate-800 px-3 py-2 rounded-xl transition cursor-pointer">
+          Tutup Sementara
+        </button>
+        <button id="btn-next-question" type="button" class="hidden bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm px-5 py-2.5 rounded-xl shadow-md transition flex items-center gap-1.5 cursor-pointer">
+          <span id="btn-next-label">Soal Berikutnya</span>
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       3. COMPLETION / REPORT CARD MODAL
+  ========================================================== -->
+  <div id="report-modal" class="hidden fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full overflow-hidden flex flex-col max-h-[92vh]">
+      
+      <!-- Executive Header -->
+      <div class="bg-gradient-to-br from-slate-900 via-blue-900 to-blue-700 p-6 text-white text-center relative">
+        <div class="w-14 h-14 mx-auto bg-amber-400 text-slate-900 rounded-2xl flex items-center justify-center text-2xl font-extrabold shadow-lg mb-3">
+          🏆
+        </div>
+        <h2 class="text-xl sm:text-2xl font-extrabold tracking-tight">Laporan Hasil Petualangan</h2>
+        <p class="text-blue-200 text-xs sm:text-sm mt-1">SMKN 1 Cilegon • Kompetensi Keahlian Bisnis Digital</p>
+      </div>
+
+      <!-- Report Body -->
+      <div class="p-6 overflow-y-auto space-y-4">
+        <!-- Student Summary Banner -->
+        <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex items-center justify-between gap-4">
+          <div>
+            <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Peserta Didik</p>
+            <p id="report-name" class="text-base font-extrabold text-slate-900">Nama Siswa</p>
+            <p id="report-class" class="text-xs font-semibold text-blue-600">Kelas XI BD 1</p>
+          </div>
+          <div class="text-right">
+            <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Nilai Akhir</p>
+            <p id="report-score" class="text-3xl font-black text-blue-700">100</p>
+            <span id="report-predicate" class="inline-block text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 mt-0.5">
+              Sangat Kompeten
+            </span>
+          </div>
+        </div>
+
+        <!-- Breakdown per Pos / Topik -->
+        <div>
+          <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Rincian Capaian per Pos Guru</h4>
+          <div id="report-breakdown" class="space-y-2">
+            <!-- Injected by JS -->
+          </div>
+        </div>
+
+        <!-- Submission Status Banner -->
+        <div id="submit-status-box" class="hidden rounded-xl px-4 py-3 text-xs font-semibold text-center border"></div>
+      </div>
+
+      <!-- Single Primary Action Button -->
+      <div class="p-5 bg-slate-50 border-t border-slate-200 flex flex-col items-center gap-2.5">
+        <button id="btn-submit-teacher" type="button" class="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:bg-slate-400 disabled:cursor-not-allowed text-white font-bold text-sm sm:text-base py-3.5 px-5 rounded-xl shadow-lg shadow-blue-600/25 transition flex items-center justify-center gap-2.5 cursor-pointer">
+          <svg id="icon-submit-send" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+          </svg>
+          <svg id="icon-submit-spinner" class="hidden w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+          </svg>
+          <span id="btn-submit-label">Kirim Hasil ke Guru</span>
+        </button>
+        <p class="text-[11px] font-medium text-slate-500 text-center">
+          Tujuan: Google Sheet Guru (<span class="font-semibold text-slate-700">riazikryah71.@guru.smk.belajar.id</span>)
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       JAVASCRIPT: GAME ENGINE, 3D CAMPUS, QUIZ & AUDIO
+  ========================================================== -->
+  <script>
+    /**
+     * 0. KONFIGURASI GOOGLE SHEETS, PIN GURU & BANK SOAL DINAMIS
+     */
+    const TEACHER_EMAIL = "riazikryah71.@guru.smk.belajar.id";
+    const GOOGLE_SCRIPT_URL = "PASTE_URL_WEB_APP_APPS_SCRIPT_DI_SINI";
+    const DEFAULT_TEACHER_PIN = "1945";
+
+    const STORAGE_KEY_SHEET_URL = "smkn1cilegon_guru_sheet_url";
+    const STORAGE_KEY_TEACHER_PIN = "smkn1cilegon_guru_pin";
+    const STORAGE_KEY_CUSTOM_QUESTIONS = "smkn1cilegon_custom_questions";
+
+    function getTeacherPin() {
+      return localStorage.getItem(STORAGE_KEY_TEACHER_PIN) || DEFAULT_TEACHER_PIN;
+    }
+
+    function resolveGoogleScriptUrl() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const paramUrl = urlParams.get("sheet");
+      if (paramUrl && paramUrl.startsWith("https://")) {
+        localStorage.setItem(STORAGE_KEY_SHEET_URL, paramUrl.trim());
+        return paramUrl.trim();
+      }
+      const savedUrl = localStorage.getItem(STORAGE_KEY_SHEET_URL);
+      if (savedUrl && savedUrl.startsWith("https://")) {
+        return savedUrl.trim();
+      }
+      if (GOOGLE_SCRIPT_URL && GOOGLE_SCRIPT_URL.startsWith("https://")) {
+        return GOOGLE_SCRIPT_URL.trim();
+      }
+      return "";
+    }
+
+    /**
+     * 1. BANK SOAL & DATA NPC GURU BISNIS DIGITAL SMKN 1 CILEGON
+     * Poin per soal dihitung otomatis (100 / total soal aktif) agar selalu maksimal 100.
+     */
+    const DEFAULT_NPC_DATA = [
+      {
+        id: "pos1",
+        name: "Bu Ria",
+        role: "Digital Branding",
+        fullTitle: "Bu Ria - Digital Branding",
+        locationLabel: "Depan Gedung Utama",
+        position: { x: 0, z: -13 },
+        rotationY: 0,
+        shirtColor: 0x2563EB, // Royal Blue
+        hairColor: 0x1E293B,
+        questions: [
+          {
+            question: "Elemen visual dan emosional yang membedakan produk UMKM siswa SMK dari kompetitor di platform digital disebut...",
+            options: [
+              "Brand Identity & Positioning",
+              "Bounce Rate Website",
+              "Server Hosting Bandwidth",
+              "Cost Per Mille (CPM)"
+            ],
+            correctIndex: 0,
+            explanation: "Brand Identity (logo, warna, tipografi, tone suara) dan Positioning membangun persepsi unik di benak konsumen."
+          },
+          {
+            question: "Mengapa konsistensi 'Tone of Voice' dan palet warna sangat penting dalam membangun Digital Branding di Instagram & TikTok?",
+            options: [
+              "Agar ukuran file gambar menjadi lebih kecil",
+              "Meningkatkan Brand Recall (ingatan merek) dan kepercayaan audiens",
+              "Menghindari biaya iklan berbayar sepenuhnya",
+              "Supaya akun tidak perlu membuat konten video"
+            ],
+            correctIndex: 1,
+            explanation: "Konsistensi visual dan gaya bahasa membuat audiens langsung mengenali merek kita dalam hitungan detik saat scrolling."
+          }
+        ]
+      },
+      {
+        id: "pos2",
+        name: "Pak Dimas",
+        role: "SEO & SEM",
+        fullTitle: "Pak Dimas - SEO & SEM",
+        locationLabel: "Depan Lab Bisnis Digital",
+        position: { x: 18, z: -3 },
+        rotationY: -Math.PI / 2,
+        shirtColor: 0x0D9488, // Teal
+        hairColor: 0x0F172A,
+        questions: [
+          {
+            question: "Perbedaan mendasar antara SEO (Search Engine Optimization) dan SEM (Search Engine Marketing) adalah...",
+            options: [
+              "SEO hanya untuk media sosial, SEM hanya untuk marketplace",
+              "SEO mengoptimalkan trafik organik gratis jangka panjang, sedangkan SEM menggunakan iklan berbayar (PPC)",
+              "SEO tidak memerlukan riset kata kunci, sedangkan SEM wajib",
+              "SEM tidak bisa menargetkan lokasi kota tertentu seperti Cilegon"
+            ],
+            correctIndex: 1,
+            explanation: "SEO berfokus pada optimasi konten & teknis agar tampil organik di halaman pertama Google, sedangkan SEM memakai iklan berbayar (Google Ads)."
+          },
+          {
+            question: "Contoh penerapan 'On-Page SEO' yang tepat pada artikel blog toko online adalah...",
+            options: [
+              "Membeli ribuan tautan spam dari situs luar negeri",
+              "Menempatkan kata kunci utama pada Title Tag, Heading (H1/H2), dan Meta Description secara natural",
+              "Menyembunyikan teks kata kunci dengan warna putih di latar putih",
+              "Mengunggah gambar berukuran 10 MB tanpa Alt Text"
+            ],
+            correctIndex: 1,
+            explanation: "On-Page SEO mencakup optimasi struktur judul, meta deskripsi, URL ramah pembaca, dan Alt Text gambar di dalam halaman web."
+          }
+        ]
+      },
+      {
+        id: "pos3",
+        name: "Bu Sari",
+        role: "Kewirausahaan (PKK)",
+        fullTitle: "Bu Sari - Kewirausahaan (PKK)",
+        locationLabel: "Taman Belajar",
+        position: { x: -18, z: 4 },
+        rotationY: Math.PI / 2,
+        shirtColor: 0xD97706, // Amber Gold
+        hairColor: 0x334155,
+        questions: [
+          {
+            question: "Dalam Business Model Canvas (BMC), blok yang menjelaskan manfaat unik produk kita untuk menyelesaikan masalah pelanggan disebut...",
+            options: [
+              "Key Partnerships",
+              "Value Propositions (Proposisi Nilai)",
+              "Cost Structure",
+              "Key Resources"
+            ],
+            correctIndex: 1,
+            explanation: "Value Propositions adalah alasan utama mengapa pelanggan memilih produk/jasa kita dibanding pesaing."
+          },
+          {
+            question: "Sebuah tim PKK SMK memproduksi keripik bandeng khas Banten dengan total biaya produksi Rp500.000 untuk 50 kemasan. Jika ingin margin keuntungan 40% dari HPP, berapa harga jual per kemasan?",
+            options: [
+              "Rp10.000",
+              "Rp12.000",
+              "Rp14.000",
+              "Rp15.000"
+            ],
+            correctIndex: 2,
+            explanation: "HPP per kemasan = Rp500.000 / 50 = Rp10.000. Keuntungan 40% = Rp4.000. Jadi harga jual = Rp10.000 + Rp4.000 = Rp14.000."
+          }
+        ]
+      },
+      {
+        id: "pos4",
+        name: "Pak Reza",
+        role: "Social Media Marketing",
+        fullTitle: "Pak Reza - Social Media Marketing",
+        locationLabel: "Kantin Digital",
+        position: { x: 14, z: 16 },
+        rotationY: -Math.PI * 0.75,
+        shirtColor: 0x7C3AED, // Violet
+        hairColor: 0x1E293B,
+        questions: [
+          {
+            question: "Dalam pembuatan konten video pendek (Reels/TikTok), bagian 3 detik pertama yang bertujuan menahan penonton agar tidak melakukan scroll disebut...",
+            options: [
+              "Call to Action (CTA)",
+              "Hook",
+              "Hashtag Strategy",
+              "Insight Analytics"
+            ],
+            correctIndex: 1,
+            explanation: "Hook adalah pancingan visual atau kalimat pembuka di 3 detik pertama untuk menarik perhatian audiens secara instan."
+          },
+          {
+            question: "Metrik yang paling akurat untuk mengukur seberapa aktif audiens berinteraksi (like, komentar, share, save) dibanding jumlah jangkauan adalah...",
+            options: [
+              "Engagement Rate (ER)",
+              "Impressions",
+              "Follower Count",
+              "Page Views"
+            ],
+            correctIndex: 0,
+            explanation: "Engagement Rate mengukur rasio interaksi nyata audiens terhadap konten, yang jauh lebih bernilai daripada sekadar jumlah pengikut."
+          }
+        ]
+      }
+    ];
+
+    // Clone default data and merge custom uploaded questions if present in localStorage
+    const NPC_DATA = JSON.parse(JSON.stringify(DEFAULT_NPC_DATA));
+
+    function applySavedCustomQuestions() {
+      const raw = localStorage.getItem(STORAGE_KEY_CUSTOM_QUESTIONS);
+      if (!raw) return false;
+      try {
+        const customMap = JSON.parse(raw);
+        let applied = false;
+        NPC_DATA.forEach((npc, idx) => {
+          const defaultNpc = DEFAULT_NPC_DATA[idx];
+          if (customMap[npc.id] && Array.isArray(customMap[npc.id]) && customMap[npc.id].length > 0) {
+            npc.questions = customMap[npc.id];
+            applied = true;
+          } else {
+            npc.questions = JSON.parse(JSON.stringify(defaultNpc.questions));
+          }
+        });
+        return applied;
+      } catch (e) {
+        return false;
+      }
+    }
+    applySavedCustomQuestions();
+
+    function getPointsPerQuestion() {
+      const totalQuestions = NPC_DATA.reduce((sum, npc) => sum + npc.questions.length, 0);
+      return totalQuestions > 0 ? 100 / totalQuestions : 0;
+    }
+
+    /**
+     * 2. PROCEDURAL WEB AUDIO API SOUND ENGINE
+     */
+    class SoundEffects {
+      constructor() {
+        this.ctx = null;
+        this.muted = false;
+      }
+
+      init() {
+        if (!this.ctx) {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          if (AudioContext) {
+            this.ctx = new AudioContext();
+          }
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      }
+
+      toggleMute() {
+        this.muted = !this.muted;
+        return this.muted;
+      }
+
+      playTone(freq, type, duration, vol = 0.12, delay = 0) {
+        if (this.muted) return;
+        this.init();
+        if (!this.ctx) return;
+
+        const now = this.ctx.currentTime + delay;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, now);
+
+        gain.gain.setValueAtTime(0.001, now);
+        gain.gain.exponentialRampToValueAtTime(vol, now + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + duration + 0.02);
+      }
+
+      playInteract() {
+        this.playTone(523.25, 'sine', 0.15, 0.12, 0);     // C5
+        this.playTone(659.25, 'sine', 0.2, 0.12, 0.08);   // E5
+      }
+
+      playCorrect() {
+        this.playTone(523.25, 'triangle', 0.16, 0.14, 0);    // C5
+        this.playTone(659.25, 'triangle', 0.16, 0.14, 0.09); // E5
+        this.playTone(783.99, 'triangle', 0.28, 0.16, 0.18); // G5
+      }
+
+      playWrong() {
+        this.playTone(220, 'sawtooth', 0.22, 0.10, 0);
+        this.playTone(185, 'sawtooth', 0.28, 0.10, 0.14);
+      }
+
+      playVictory() {
+        const notes = [523.25, 659.25, 783.99, 1046.50];
+        notes.forEach((freq, idx) => {
+          this.playTone(freq, 'triangle', 0.32, 0.15, idx * 0.11);
+        });
+      }
+    }
+
+    const sfx = new SoundEffects();
+
+    /**
+     * 3. GAME STATE MANAGEMENT
+     */
+    const gameState = {
+      isPlaying: false,
+      isModalOpen: false,
+      studentName: "",
+      studentClass: "",
+      score: 0,
+      completedPos: {}, // { pos1: { completed: true, correctCount: 2, answers: [] } }
+      activeNpcId: null,
+      activeQuestionIndex: 0,
+      hasAnsweredCurrent: false,
+      nearbyNpc: null,
+      hasSubmittedToTeacher: false
+    };
+
+    /**
+     * 4. THREE.JS 3D SCENE, LIGHTING & CAMPUS ENVIRONMENT SETUP
+     */
+    const canvas = document.getElementById('game-canvas');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xBAE6FD);
+    scene.fog = new THREE.FogExp2(0xBAE6FD, 0.0085);
+
+    const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 200);
+    camera.position.set(0, 6, 26);
+
+    // Lighting
+    const hemiLight = new THREE.HemisphereLight(0xFFFFFF, 0x334155, 0.85);
+    hemiLight.position.set(0, 40, 0);
+    scene.add(hemiLight);
+
+    const dirLight = new THREE.DirectionalLight(0xFFFBEB, 1.05);
+    dirLight.position.set(28, 42, 24);
+    dirLight.castShadow = true;
+    dirLight.shadow.mapSize.width = 2048;
+    dirLight.shadow.mapSize.height = 2048;
+    dirLight.shadow.camera.near = 5;
+    dirLight.shadow.camera.far = 120;
+    const d = 42;
+    dirLight.shadow.camera.left = -d;
+    dirLight.shadow.camera.right = d;
+    dirLight.shadow.camera.top = d;
+    dirLight.shadow.camera.bottom = -d;
+    scene.add(dirLight);
+
+    // Colliders Array (AABB)
+    const colliders = [];
+    function addBoxCollider(x, z, width, depth) {
+      colliders.push({
+        minX: x - width / 2 - 0.65,
+        maxX: x + width / 2 + 0.65,
+        minZ: z - depth / 2 - 0.65,
+        maxZ: z + depth / 2 + 0.65
+      });
+    }
+
+    function checkCollision(x, z) {
+      if (Math.abs(x) > 36 || Math.abs(z) > 36) return true;
+      for (let i = 0; i < colliders.length; i++) {
+        const c = colliders[i];
+        if (x > c.minX && x < c.maxX && z > c.minZ && z < c.maxZ) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    // Ground & Pathways
+    const groundGeo = new THREE.PlaneGeometry(84, 84);
+    const groundMat = new THREE.MeshStandardMaterial({ color: 0x4ADE80, roughness: 0.9 });
+    const ground = new THREE.Mesh(groundGeo, groundMat);
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    // Central Paved Courtyard
+    const courtGeo = new THREE.BoxGeometry(36, 0.12, 34);
+    const courtMat = new THREE.MeshStandardMaterial({ color: 0xCBD5E1, roughness: 0.85 });
+    const court = new THREE.Mesh(courtGeo, courtMat);
+    court.position.set(0, 0.06, 2);
+    court.receiveShadow = true;
+    scene.add(court);
+
+    // Walkways to Buildings
+    const pathMat = new THREE.MeshStandardMaterial({ color: 0xE2E8F0, roughness: 0.8 });
+    const northPath = new THREE.Mesh(new THREE.BoxGeometry(8, 0.13, 14), pathMat);
+    northPath.position.set(0, 0.065, -14);
+    northPath.receiveShadow = true;
+    scene.add(northPath);
+
+    const eastWestPath = new THREE.Mesh(new THREE.BoxGeometry(46, 0.13, 6), pathMat);
+    eastWestPath.position.set(0, 0.065, 2);
+    eastWestPath.receiveShadow = true;
+    scene.add(eastWestPath);
+
+    // Perimeter Fence
+    const fenceMat = new THREE.MeshStandardMaterial({ color: 0x1E293B, roughness: 0.6 });
+    const fenceBars = [
+      { x: 0, z: -37.5, w: 76, d: 1 },
+      { x: 0, z: 37.5, w: 76, d: 1 },
+      { x: -37.5, z: 0, w: 1, d: 76 },
+      { x: 37.5, z: 0, w: 1, d: 76 }
+    ];
+    fenceBars.forEach(b => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(b.w, 2.2, b.d), fenceMat);
+      m.position.set(b.x, 1.1, b.z);
+      m.castShadow = true;
+      m.receiveShadow = true;
+      scene.add(m);
+    });
+
+    // Helper: School Building Generator
+    function createBuilding(x, z, w, h, d, wallColor, roofColor, trimColor) {
+      const group = new THREE.Group();
+      group.position.set(x, 0, z);
+
+      const body = new THREE.Mesh(
+        new THREE.BoxGeometry(w, h, d),
+        new THREE.MeshStandardMaterial({ color: wallColor, roughness: 0.7 })
+      );
+      body.position.y = h / 2;
+      body.castShadow = true;
+      body.receiveShadow = true;
+      group.add(body);
+
+      const roof = new THREE.Mesh(
+        new THREE.BoxGeometry(w + 1.2, 0.9, d + 1.2),
+        new THREE.MeshStandardMaterial({ color: roofColor, roughness: 0.6 })
+      );
+      roof.position.y = h + 0.45;
+      roof.castShadow = true;
+      group.add(roof);
+
+      const trim = new THREE.Mesh(
+        new THREE.BoxGeometry(w + 0.2, 0.45, d + 0.2),
+        new THREE.MeshStandardMaterial({ color: trimColor, roughness: 0.5 })
+      );
+      trim.position.y = 0.25;
+      group.add(trim);
+
+      // Decorative Windows
+      const winMat = new THREE.MeshStandardMaterial({ color: 0x38BDF8, roughness: 0.2, metalness: 0.3 });
+      const winCount = Math.max(2, Math.floor(w / 4.5));
+      for (let i = 0; i < winCount; i++) {
+        const wx = -w / 2 + (w / (winCount + 1)) * (i + 1);
+        const winFront = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.5, 0.15), winMat);
+        winFront.position.set(wx, h * 0.58, d / 2 + 0.05);
+        group.add(winFront);
+
+        const winBack = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.5, 0.15), winMat);
+        winBack.position.set(wx, h * 0.58, -d / 2 - 0.05);
+        group.add(winBack);
+      }
+
+      scene.add(group);
+      addBoxCollider(x, z, w, d);
+    }
+
+    // 4 Campus Buildings
+    createBuilding(0, -24, 24, 7.5, 10, 0xF8FAFC, 0x1E3A8A, 0x2563EB);    // Gedung Utama (Utara)
+    createBuilding(26, -3, 10, 6.0, 16, 0xF1F5F9, 0x0F766E, 0x14B8A6);    // Lab Bisnis Digital (Timur)
+    createBuilding(-26, 4, 10, 5.5, 14, 0xFEF3C7, 0xB45309, 0xF59E0B);    // Ruang PKK & Taman (Barat)
+    createBuilding(16, 24, 14, 5.0, 9, 0xEDE9FE, 0x5B21B6, 0x7C3AED);     // Kantin Digital (Tenggara)
+
+    // Flagpole in Courtyard Center
+    const poleGroup = new THREE.Group();
+    poleGroup.position.set(0, 0, 2);
+    const poleBase = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.4, 0.4, 16), new THREE.MeshStandardMaterial({ color: 0x64748B }));
+    poleBase.position.y = 0.2;
+    poleGroup.add(poleBase);
+
+    const poleRod = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 9.5, 12), new THREE.MeshStandardMaterial({ color: 0xE2E8F0, metalness: 0.6 }));
+    poleRod.position.y = 4.75;
+    poleRod.castShadow = true;
+    poleGroup.add(poleRod);
+
+    const flagRed = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.6, 0.05), new THREE.MeshStandardMaterial({ color: 0xDC2626 }));
+    flagRed.position.set(1.05, 8.9, 0);
+    poleGroup.add(flagRed);
+
+    const flagWhite = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.6, 0.05), new THREE.MeshStandardMaterial({ color: 0xFFFFFF }));
+    flagWhite.position.set(1.05, 8.3, 0);
+    poleGroup.add(flagWhite);
+
+    scene.add(poleGroup);
+    addBoxCollider(0, 2, 2.2, 2.2);
+
+    // Decorative Low-Poly Trees
+    function createTree(x, z) {
+      const tree = new THREE.Group();
+      tree.position.set(x, 0, z);
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.38, 1.8, 8), new THREE.MeshStandardMaterial({ color: 0x78350F }));
+      trunk.position.y = 0.9;
+      trunk.castShadow = true;
+      tree.add(trunk);
+
+      const foliage = new THREE.Mesh(new THREE.DodecahedronGeometry(1.5, 1), new THREE.MeshStandardMaterial({ color: 0x16A34A, roughness: 0.8 }));
+      foliage.position.y = 2.7;
+      foliage.castShadow = true;
+      tree.add(foliage);
+
+      scene.add(tree);
+      addBoxCollider(x, z, 1.1, 1.1);
+    }
+
+    const treeCoords = [
+      [-14, -14], [14, -14], [-15, 14], [-22, -12], [22, 12], [-10, 24], [5, 25]
+    ];
+    treeCoords.forEach(([tx, tz]) => createTree(tx, tz));
+
+    /**
+     * 5. HUMANOID AVATAR BUILDER (PLAYER & NPC TEACHERS)
+     */
+    function createHumanoidCharacter({ shirtColor, pantsColor, skinColor, hairColor }) {
+      const root = new THREE.Group();
+      root.position.y = 0.12;
+
+      const skinMat = new THREE.MeshStandardMaterial({ color: skinColor || 0xFDBA74, roughness: 0.6 });
+      const shirtMat = new THREE.MeshStandardMaterial({ color: shirtColor, roughness: 0.6 });
+      const pantsMat = new THREE.MeshStandardMaterial({ color: pantsColor || 0x1E293B, roughness: 0.7 });
+      const hairMat = new THREE.MeshStandardMaterial({ color: hairColor || 0x0F172A, roughness: 0.8 });
+
+      // Torso
+      const torso = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.95, 0.42), shirtMat);
+      torso.position.y = 1.25;
+      torso.castShadow = true;
+      root.add(torso);
+
+      // Head Group
+      const headGroup = new THREE.Group();
+      headGroup.position.y = 1.98;
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.54, 0.54), skinMat);
+      head.castShadow = true;
+      headGroup.add(head);
+
+      const hair = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.22, 0.58), hairMat);
+      hair.position.y = 0.22;
+      headGroup.add(hair);
+
+      // Eyes
+      const eyeMat = new THREE.MeshBasicMaterial({ color: 0x0F172A });
+      const leftEye = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.05), eyeMat);
+      leftEye.position.set(-0.13, 0.03, 0.27);
+      headGroup.add(leftEye);
+
+      const rightEye = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.05), eyeMat);
+      rightEye.position.set(0.13, 0.03, 0.27);
+      headGroup.add(rightEye);
+
+      root.add(headGroup);
+
+      // Limbs with Pivots
+      const leftArmPivot = new THREE.Group();
+      leftArmPivot.position.set(-0.52, 1.65, 0);
+      const leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.82, 0.24), shirtMat);
+      leftArm.position.y = -0.35;
+      leftArm.castShadow = true;
+      leftArmPivot.add(leftArm);
+      root.add(leftArmPivot);
+
+      const rightArmPivot = new THREE.Group();
+      rightArmPivot.position.set(0.52, 1.65, 0);
+      const rightArm = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.82, 0.24), shirtMat);
+      rightArm.position.y = -0.35;
+      rightArm.castShadow = true;
+      rightArmPivot.add(rightArm);
+      root.add(rightArmPivot);
+
+      const leftLegPivot = new THREE.Group();
+      leftLegPivot.position.set(-0.2, 0.78, 0);
+      const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.78, 0.28), pantsMat);
+      leftLeg.position.y = -0.39;
+      leftLeg.castShadow = true;
+      leftLegPivot.add(leftLeg);
+      root.add(leftLegPivot);
+
+      const rightLegPivot = new THREE.Group();
+      rightLegPivot.position.set(0.2, 0.78, 0);
+      const rightLeg = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.78, 0.28), pantsMat);
+      rightLeg.position.y = -0.39;
+      rightLeg.castShadow = true;
+      rightLegPivot.add(rightLeg);
+      root.add(rightLegPivot);
+
+      return { root, headGroup, leftArmPivot, rightArmPivot, leftLegPivot, rightLegPivot };
+    }
+
+    // Spawn Player Student Avatar (White Shirt + Grey SMK Trousers)
+    const player = createHumanoidCharacter({
+      shirtColor: 0xFFFFFF,
+      pantsColor: 0x475569,
+      skinColor: 0xFDBA74,
+      hairColor: 0x0F172A
+    });
+    player.root.position.set(0, 0.12, 12);
+    player.root.rotation.y = Math.PI;
+    scene.add(player.root);
+
+    // Spawn 4 NPC Teachers + Floating Beacons + Screen Labels
+    const npcLabelsLayer = document.getElementById('npc-labels-layer');
+    const npcEntities = [];
+
+    NPC_DATA.forEach((npc) => {
+      const charObj = createHumanoidCharacter({
+        shirtColor: npc.shirtColor,
+        pantsColor: 0x1E293B,
+        skinColor: 0xFDBA74,
+        hairColor: npc.hairColor
+      });
+      charObj.root.position.set(npc.position.x, 0.12, npc.position.z);
+      charObj.root.rotation.y = npc.rotationY;
+      scene.add(charObj.root);
+
+      // Ground Ring Indicator
+      const ringGeo = new THREE.RingGeometry(1.1, 1.35, 32);
+      const ringMat = new THREE.MeshBasicMaterial({ color: 0xFBBF24, side: THREE.DoubleSide });
+      const ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.set(npc.position.x, 0.14, npc.position.z);
+      scene.add(ring);
+
+      // Floating Diamond Beacon Above Head
+      const beaconGeo = new THREE.OctahedronGeometry(0.32, 0);
+      const beaconMat = new THREE.MeshStandardMaterial({
+        color: 0xFBBF24,
+        emissive: 0xD97706,
+        emissiveIntensity: 0.45
+      });
+      const beacon = new THREE.Mesh(beaconGeo, beaconMat);
+      beacon.position.set(npc.position.x, 2.85, npc.position.z);
+      scene.add(beacon);
+
+      // Floating HTML Nameplate
+      const labelEl = document.createElement('div');
+      labelEl.className = "absolute top-0 left-0 transition-opacity duration-150";
+      labelEl.innerHTML = `
+        <div class="bg-slate-900/90 backdrop-blur-sm text-white px-3 py-1.5 rounded-xl border border-white/20 shadow-lg text-center whitespace-nowrap">
+          <div class="text-xs font-extrabold leading-tight">${npc.name}</div>
+          <div class="text-[10px] font-semibold text-amber-300 leading-tight">${npc.role}</div>
+          <span class="npc-status-pill inline-block mt-1 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/40">
+            Belum Selesai
+          </span>
+        </div>
+      `;
+      npcLabelsLayer.appendChild(labelEl);
+
+      npcEntities.push({ data: npc, charObj, ring, beacon, labelEl });
+    });
+
+    /**
+     * 6. INPUT CONTROLS (KEYBOARD, MOUSE ORBIT & MOBILE TOUCH JOYSTICK)
+     */
+    const keys = { w: false, a: false, s: false, d: false, ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
+    let cameraYaw = 0;
+    let cameraPitch = 0.25;
+    let isDraggingCamera = false;
+    let prevPointerX = 0;
+    let prevPointerY = 0;
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key in keys) keys[e.key] = true;
+      const lower = e.key.toLowerCase();
+      if (lower in keys) keys[lower] = true;
+
+      if ((lower === 'e' || e.key === 'Enter') && gameState.isPlaying && !gameState.isModalOpen && gameState.nearbyNpc) {
+        openQuizForNpc(gameState.nearbyNpc);
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      if (e.key in keys) keys[e.key] = false;
+      const lower = e.key.toLowerCase();
+      if (lower in keys) keys[lower] = false;
+    });
+
+    // Mouse / Touch Camera Orbit on Canvas
+    canvas.addEventListener('pointerdown', (e) => {
+      if (!gameState.isPlaying || gameState.isModalOpen) return;
+      isDraggingCamera = true;
+      prevPointerX = e.clientX;
+      prevPointerY = e.clientY;
+    });
+
+    window.addEventListener('pointermove', (e) => {
+      if (!isDraggingCamera) return;
+      const dx = e.clientX - prevPointerX;
+      const dy = e.clientY - prevPointerY;
+      prevPointerX = e.clientX;
+      prevPointerY = e.clientY;
+
+      cameraYaw -= dx * 0.0065;
+      cameraPitch = Math.max(-0.1, Math.min(0.85, cameraPitch + dy * 0.005));
+    });
+
+    window.addEventListener('pointerup', () => {
+      isDraggingCamera = false;
+    });
+
+    // Mobile Virtual Joystick
+    const joystickZone = document.getElementById('touch-joystick-zone');
+    const joystickKnob = document.getElementById('touch-joystick-knob');
+    const touchMove = { x: 0, z: 0 };
+    let joystickTouchId = null;
+
+    if (joystickZone) {
+      joystickZone.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        const touch = e.changedTouches[0];
+        joystickTouchId = touch.identifier;
+        updateJoystick(touch);
+      }, { passive: false });
+
+      joystickZone.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          if (e.changedTouches[i].identifier === joystickTouchId) {
+            updateJoystick(e.changedTouches[i]);
+          }
+        }
+      }, { passive: false });
+
+      const resetJoystick = (e) => {
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          if (e.changedTouches[i].identifier === joystickTouchId) {
+            joystickTouchId = null;
+            touchMove.x = 0;
+            touchMove.z = 0;
+            joystickKnob.style.transform = `translate(0px, 0px)`;
+          }
+        }
+      };
+      joystickZone.addEventListener('touchend', resetJoystick);
+      joystickZone.addEventListener('touchcancel', resetJoystick);
+    }
+
+    function updateJoystick(touch) {
+      const rect = joystickZone.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      const maxRadius = rect.width / 2 - 20;
+
+      let dx = touch.clientX - centerX;
+      let dy = touch.clientY - centerY;
+      const dist = Math.hypot(dx, dy);
+
+      if (dist > maxRadius) {
+        dx = (dx / dist) * maxRadius;
+        dy = (dy / dist) * maxRadius;
+      }
+
+      joystickKnob.style.transform = `translate(${dx}px, ${dy}px)`;
+      touchMove.x = dx / maxRadius;
+      touchMove.z = dy / maxRadius;
+    }
+
+    /**
+     * 7. START SCREEN, HUD & AUDIO CONTROLS
+     */
+    const startModal = document.getElementById('start-modal');
+    const startForm = document.getElementById('start-form');
+    const startError = document.getElementById('start-error');
+    const hudOverlay = document.getElementById('hud-overlay');
+    const interactionPrompt = document.getElementById('interaction-prompt');
+    const interactionText = document.getElementById('interaction-text');
+    const btnInteract = document.getElementById('btn-interact');
+
+    // Teacher PIN Gate & Protected Setup Panel Logic
+    const btnOpenSheetSetup = document.getElementById('btn-open-sheet-setup');
+    const sheetSetupPanel = document.getElementById('sheet-setup-panel');
+    const teacherPinGate = document.getElementById('teacher-pin-gate');
+    const teacherUnlockedControls = document.getElementById('teacher-unlocked-controls');
+    const inputTeacherPin = document.getElementById('input-teacher-pin');
+    const btnVerifyPin = document.getElementById('btn-verify-pin');
+    const pinErrorMsg = document.getElementById('pin-error-msg');
+    const btnLockTeacher = document.getElementById('btn-lock-teacher');
+    const btnBackToStart = document.getElementById('btn-back-to-start');
+    const btnBackToStartBottom = document.getElementById('btn-back-to-start-bottom');
+
+    const inputSheetUrl = document.getElementById('input-sheet-url');
+    const btnSaveSheetUrl = document.getElementById('btn-save-sheet-url');
+    const sheetSetupFeedback = document.getElementById('sheet-setup-feedback');
+    const sheetStatusBadge = document.getElementById('sheet-status-badge');
+
+    const btnDownloadTemplate = document.getElementById('btn-download-template');
+    const inputUploadQuestions = document.getElementById('input-upload-questions');
+    const btnResetQuestions = document.getElementById('btn-reset-questions');
+    const questionBankStatus = document.getElementById('question-bank-status');
+    const inputNewPin = document.getElementById('input-new-pin');
+    const btnSaveNewPin = document.getElementById('btn-save-new-pin');
+
+    let isTeacherUnlocked = false;
+
+    function showTeacherFeedback(msg, isError = false) {
+      sheetSetupFeedback.textContent = msg;
+      sheetSetupFeedback.classList.remove('hidden', 'text-emerald-700', 'bg-emerald-50', 'border-emerald-200', 'text-red-700', 'bg-red-50', 'border-red-200');
+      if (isError) {
+        sheetSetupFeedback.classList.add('text-red-700', 'bg-red-50', 'border-red-200');
+      } else {
+        sheetSetupFeedback.classList.add('text-emerald-700', 'bg-emerald-50', 'border-emerald-200');
+      }
+    }
+
+    function refreshSheetStatusBadge() {
+      const activeUrl = resolveGoogleScriptUrl();
+      if (activeUrl) {
+        inputSheetUrl.value = activeUrl;
+        sheetStatusBadge.textContent = "Sheet Aktif ✓";
+        btnOpenSheetSetup.classList.remove("bg-white/15");
+        btnOpenSheetSetup.classList.add("bg-emerald-500/30", "border-emerald-300/50");
+      } else {
+        sheetStatusBadge.textContent = "Panel Guru";
+        btnOpenSheetSetup.classList.add("bg-white/15");
+        btnOpenSheetSetup.classList.remove("bg-emerald-500/30", "border-emerald-300/50");
+      }
+
+      const totalQ = NPC_DATA.reduce((s, n) => s + n.questions.length, 0);
+      const isCustom = Boolean(localStorage.getItem(STORAGE_KEY_CUSTOM_QUESTIONS));
+      questionBankStatus.innerHTML = `Bank Soal Aktif: <strong>${isCustom ? 'Kustom Guru' : 'Bawaan'} (${totalQ} Soal / 4 Pos)</strong>`;
+    }
+    refreshSheetStatusBadge();
+
+    function openTeacherPanelView() {
+      sheetSetupPanel.classList.remove('hidden');
+      startForm.classList.add('hidden');
+      sheetSetupFeedback.classList.add('hidden');
+      pinErrorMsg.classList.add('hidden');
+      if (!isTeacherUnlocked) {
+        teacherPinGate.classList.remove('hidden');
+        teacherUnlockedControls.classList.add('hidden');
+        inputTeacherPin.value = '';
+        inputTeacherPin.focus();
+      }
+    }
+
+    function closeTeacherPanelView() {
+      sheetSetupPanel.classList.add('hidden');
+      startForm.classList.remove('hidden');
+      sheetSetupFeedback.classList.add('hidden');
+      pinErrorMsg.classList.add('hidden');
+    }
+
+    btnOpenSheetSetup.addEventListener('click', () => {
+      if (sheetSetupPanel.classList.contains('hidden')) {
+        openTeacherPanelView();
+      } else {
+        closeTeacherPanelView();
+      }
+    });
+
+    btnBackToStart.addEventListener('click', closeTeacherPanelView);
+    btnBackToStartBottom.addEventListener('click', closeTeacherPanelView);
+
+    function verifyTeacherPin() {
+      if (inputTeacherPin.value.trim() === getTeacherPin()) {
+        isTeacherUnlocked = true;
+        pinErrorMsg.classList.add('hidden');
+        teacherPinGate.classList.add('hidden');
+        teacherUnlockedControls.classList.remove('hidden');
+        refreshSheetStatusBadge();
+      } else {
+        pinErrorMsg.classList.remove('hidden');
+      }
+    }
+
+    btnVerifyPin.addEventListener('click', verifyTeacherPin);
+    inputTeacherPin.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        verifyTeacherPin();
+      }
+    });
+
+    btnLockTeacher.addEventListener('click', () => {
+      isTeacherUnlocked = false;
+      teacherUnlockedControls.classList.add('hidden');
+      teacherPinGate.classList.remove('hidden');
+      inputTeacherPin.value = '';
+      closeTeacherPanelView();
+    });
+
+    btnSaveSheetUrl.addEventListener('click', () => {
+      const val = inputSheetUrl.value.trim();
+      if (!val) {
+        localStorage.removeItem(STORAGE_KEY_SHEET_URL);
+        refreshSheetStatusBadge();
+        showTeacherFeedback("Link Google Sheet telah dihapus.");
+        return;
+      }
+      if (!val.startsWith("https://script.google.com/")) {
+        showTeacherFeedback("❌ URL harus diawali dengan https://script.google.com/...", true);
+        return;
+      }
+      localStorage.setItem(STORAGE_KEY_SHEET_URL, val);
+      refreshSheetStatusBadge();
+      showTeacherFeedback("✅ URL Web App Google Sheet Guru berhasil disimpan!");
+    });
+
+    btnSaveNewPin.addEventListener('click', () => {
+      const newPin = inputNewPin.value.trim();
+      if (newPin.length < 4) {
+        showTeacherFeedback("❌ PIN baru minimal 4 karakter.", true);
+        return;
+      }
+      localStorage.setItem(STORAGE_KEY_TEACHER_PIN, newPin);
+      inputNewPin.value = '';
+      showTeacherFeedback("✅ PIN Guru berhasil diperbarui!");
+    });
+
+    // CSV Parser & Template Downloader for Teacher Question Upload
+    function parseCsvLine(line, delimiter) {
+      const result = [];
+      let current = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === '"') {
+          if (inQuotes && line[i + 1] === '"') {
+            current += '"';
+            i++;
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (ch === delimiter && !inQuotes) {
+          result.push(current.trim());
+          current = '';
+        } else {
+          current += ch;
+        }
+      }
+      result.push(current.trim());
+      return result;
+    }
+
+    function parseUploadedCsv(text) {
+      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      if (lines.length < 2) throw new Error("File CSV kosong atau tidak memiliki baris soal.");
+
+      const delimiter = lines[0].includes(';') ? ';' : ',';
+      const grouped = { pos1: [], pos2: [], pos3: [], pos4: [] };
+      const letterMap = { A: 0, B: 1, C: 2, D: 3, '1': 0, '2': 1, '3': 2, '4': 3 };
+
+      for (let i = 1; i < lines.length; i++) {
+        const cols = parseCsvLine(lines[i], delimiter);
+        if (cols.length < 7) continue;
+
+        let posKey = cols[0].toLowerCase().replace(/\s+/g, '');
+        if (posKey === '1') posKey = 'pos1';
+        if (posKey === '2') posKey = 'pos2';
+        if (posKey === '3') posKey = 'pos3';
+        if (posKey === '4') posKey = 'pos4';
+
+        if (!grouped[posKey]) continue;
+
+        const keyRaw = (cols[6] || 'A').toUpperCase().trim();
+        const correctIdx = keyRaw in letterMap ? letterMap[keyRaw] : 0;
+
+        grouped[posKey].push({
+          question: cols[1],
+          options: [cols[2], cols[3], cols[4], cols[5]],
+          correctIndex: correctIdx,
+          explanation: cols[7] || "Jawaban telah dicatat oleh sistem."
+        });
+      }
+
+      const totalParsed = Object.values(grouped).reduce((acc, arr) => acc + arr.length, 0);
+      if (totalParsed === 0) {
+        throw new Error("Tidak ada baris soal valid. Pastikan kolom pertama berisi pos1, pos2, pos3, atau pos4.");
+      }
+      return grouped;
+    }
+
+    btnDownloadTemplate.addEventListener('click', () => {
+      const csvRows = [
+        ["pos", "pertanyaan", "opsi_a", "opsi_b", "opsi_c", "opsi_d", "kunci", "pembahasan"],
+        ["pos1", "Apa tujuan utama membangun Brand Identity pada bisnis digital?", "Membedakan merek dan membangun kepercayaan konsumen", "Memperbesar ukuran file foto", "Menghindari pajak usaha", "Mengurangi jumlah karyawan"],
+        ["pos2", "Apa kepanjangan dari SEO dalam pemasaran digital?", "Search Engine Optimization", "Social Engagement Order", "Sales Executive Online", "System Enterprise Operation"],
+        ["pos3", "Blok pada Business Model Canvas yang berisi manfaat utama produk adalah...", "Value Propositions", "Cost Structure", "Key Partners", "Channels"],
+        ["pos4", "Bagian 3 detik pertama pada video TikTok/Reels untuk menarik perhatian disebut...", "Hook", "Caption", "Hashtag", "Bio Link"]
+      ];
+      const csvContent = csvRows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+      const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "Template_Soal_Petualangan_Digital.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    inputUploadQuestions.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const content = ev.target.result;
+          let parsedMap = null;
+
+          if (file.name.toLowerCase().endsWith('.json')) {
+            const json = JSON.parse(content);
+            if (Array.isArray(json)) {
+              parsedMap = { pos1: [], pos2: [], pos3: [], pos4: [] };
+              json.forEach(item => {
+                if (item.id && Array.isArray(item.questions)) {
+                  parsedMap[item.id] = item.questions;
+                }
+              });
+            } else {
+              parsedMap = json;
+            }
+          } else {
+            parsedMap = parseUploadedCsv(content);
+          }
+
+          localStorage.setItem(STORAGE_KEY_CUSTOM_QUESTIONS, JSON.stringify(parsedMap));
+          applySavedCustomQuestions();
+          refreshSheetStatusBadge();
+          const totalQ = NPC_DATA.reduce((s, n) => s + n.questions.length, 0);
+          showTeacherFeedback(`✅ Berhasil mengunggah ${totalQ} soal dari "${file.name}"!`);
+        } catch (err) {
+          showTeacherFeedback(`❌ Gagal memproses file: ${err.message}`, true);
+        } finally {
+          inputUploadQuestions.value = '';
+        }
+      };
+      reader.readAsText(file);
+    });
+
+    btnResetQuestions.addEventListener('click', () => {
+      localStorage.removeItem(STORAGE_KEY_CUSTOM_QUESTIONS);
+      applySavedCustomQuestions();
+      refreshSheetStatusBadge();
+      showTeacherFeedback("✅ Bank soal dikembalikan ke soal bawaan.");
+    });
+
+    // Start Game Form Submit
+    startForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const nameVal = document.getElementById('input-name').value.trim();
+      const classVal = document.getElementById('input-class').value.trim();
+
+      if (!nameVal || !classVal) {
+        startError.classList.remove('hidden');
+        return;
+      }
+
+      startError.classList.add('hidden');
+      gameState.studentName = nameVal;
+      gameState.studentClass = classVal;
+      gameState.isPlaying = true;
+
+      document.getElementById('hud-student-name').textContent = nameVal;
+      document.getElementById('hud-student-class').textContent = classVal;
+      updateHUD();
+
+      sfx.init();
+      sfx.playInteract();
+      startModal.classList.add('hidden');
+      hudOverlay.classList.remove('hidden');
+    });
+
+    function updateHUD() {
+      document.getElementById('hud-score').textContent = Math.round(gameState.score);
+      const completedCount = Object.values(gameState.completedPos).filter(p => p.completed).length;
+      document.getElementById('hud-progress').textContent = `${completedCount}/${NPC_DATA.length}`;
+    }
+
+    // Audio Mute Toggle
+    const btnToggleAudio = document.getElementById('btn-toggle-audio');
+    const iconSoundOn = document.getElementById('icon-sound-on');
+    const iconSoundOff = document.getElementById('icon-sound-off');
+
+    btnToggleAudio.addEventListener('click', () => {
+      const isMuted = sfx.toggleMute();
+      iconSoundOn.classList.toggle('hidden', isMuted);
+      iconSoundOff.classList.toggle('hidden', !isMuted);
+    });
+
+    // Interact Button Click
+    btnInteract.addEventListener('click', () => {
+      if (gameState.isPlaying && !gameState.isModalOpen && gameState.nearbyNpc) {
+        openQuizForNpc(gameState.nearbyNpc);
+      }
+    });
+
+    /**
+     * 8. QUIZ MODAL LOGIC
+     */
+    const quizModal = document.getElementById('quiz-modal');
+    const quizTopicBadge = document.getElementById('quiz-topic-badge');
+    const quizTeacherName = document.getElementById('quiz-teacher-name');
+    const quizQCounter = document.getElementById('quiz-q-counter');
+    const quizQuestionText = document.getElementById('quiz-question-text');
+    const quizOptionsContainer = document.getElementById('quiz-options-container');
+    const quizFeedbackBox = document.getElementById('quiz-feedback-box');
+    const quizFeedbackTitle = document.getElementById('quiz-feedback-title');
+    const quizFeedbackDesc = document.getElementById('quiz-feedback-desc');
+    const btnNextQuestion = document.getElementById('btn-next-question');
+    const btnNextLabel = document.getElementById('btn-next-label');
+    const btnCloseQuiz = document.getElementById('btn-close-quiz');
+
+    function openQuizForNpc(npcObj) {
+      sfx.playInteract();
+      gameState.isModalOpen = true;
+      gameState.activeNpcId = npcObj.data.id;
+      gameState.activeQuestionIndex = 0;
+      gameState.hasAnsweredCurrent = false;
+
+      // Initialize progress tracker for this pos if not exists
+      if (!gameState.completedPos[npcObj.data.id]) {
+        gameState.completedPos[npcObj.data.id] = {
+          completed: false,
+          correctCount: 0,
+          answers: []
+        };
+      } else {
+        gameState.completedPos[npcObj.data.id].correctCount = 0;
+        gameState.completedPos[npcObj.data.id].answers = [];
+      }
+
+      interactionPrompt.classList.add('hidden');
+      quizModal.classList.remove('hidden');
+      renderCurrentQuestion();
+    }
+
+    function renderCurrentQuestion() {
+      const npc = NPC_DATA.find(n => n.id === gameState.activeNpcId);
+      if (!npc) return;
+
+      const qIdx = gameState.activeQuestionIndex;
+      const qData = npc.questions[qIdx];
+      gameState.hasAnsweredCurrent = false;
+
+      quizTopicBadge.textContent = `POS ${NPC_DATA.indexOf(npc) + 1} • ${npc.locationLabel}`;
+      quizTeacherName.textContent = npc.fullTitle;
+      quizQCounter.textContent = `${qIdx + 1} / ${npc.questions.length}`;
+      quizQuestionText.textContent = qData.question;
+
+      quizFeedbackBox.classList.add('hidden');
+      btnNextQuestion.classList.add('hidden');
+      quizOptionsContainer.innerHTML = '';
+
+      const letters = ['A', 'B', 'C', 'D'];
+      qData.options.forEach((optText, idx) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = "w-full text-left p-3.5 rounded-2xl border-2 border-slate-200 hover:border-blue-500 hover:bg-blue-50/60 transition flex items-start gap-3 cursor-pointer";
+        btn.innerHTML = `
+          <span class="w-7 h-7 rounded-lg bg-slate-100 text-slate-700 font-extrabold text-xs flex items-center justify-center shrink-0 mt-0.5">${letters[idx]}</span>
+          <span class="text-sm font-medium text-slate-800 leading-snug">${optText}</span>
+        `;
+        btn.addEventListener('click', () => handleSelectAnswer(idx));
+        quizOptionsContainer.appendChild(btn);
+      });
+    }
+
+    function handleSelectAnswer(selectedIndex) {
+      if (gameState.hasAnsweredCurrent) return;
+      gameState.hasAnsweredCurrent = true;
+
+      const npc = NPC_DATA.find(n => n.id === gameState.activeNpcId);
+      const qData = npc.questions[gameState.activeQuestionIndex];
+      const isCorrect = selectedIndex === qData.correctIndex;
+
+      // Highlight Option Buttons
+      const optionButtons = quizOptionsContainer.querySelectorAll('button');
+      optionButtons.forEach((btn, idx) => {
+        btn.disabled = true;
+        btn.classList.remove('hover:border-blue-500', 'hover:bg-blue-50/60', 'cursor-pointer');
+        if (idx === qData.correctIndex) {
+          btn.classList.remove('border-slate-200');
+          btn.classList.add('border-emerald-500', 'bg-emerald-50');
+          btn.querySelector('span').classList.add('bg-emerald-600', 'text-white');
+        } else if (idx === selectedIndex && !isCorrect) {
+          btn.classList.remove('border-slate-200');
+          btn.classList.add('border-red-500', 'bg-red-50');
+          btn.querySelector('span').classList.add('bg-red-600', 'text-white');
+        }
+      });
+
+      // Score & Feedback
+      quizFeedbackBox.classList.remove('hidden', 'bg-emerald-50', 'border-emerald-200', 'bg-red-50', 'border-red-200');
+      const letters = ['A', 'B', 'C', 'D'];
+      gameState.completedPos[npc.id].answers.push({
+        soalNo: gameState.activeQuestionIndex + 1,
+        dipilih: `${letters[selectedIndex]}. ${qData.options[selectedIndex]}`,
+        benar: isCorrect
+      });
+
+      if (isCorrect) {
+        sfx.playCorrect();
+        gameState.score += getPointsPerQuestion();
+        gameState.completedPos[npc.id].correctCount += 1;
+        updateHUD();
+
+        quizFeedbackBox.classList.add('bg-emerald-50', 'border-emerald-200');
+        quizFeedbackTitle.innerHTML = `<span class="text-emerald-700">✅ Jawaban Tepat! (+${Number(getPointsPerQuestion().toFixed(1))} Poin)</span>`;
+      } else {
+        sfx.playWrong();
+        quizFeedbackBox.classList.add('bg-red-50', 'border-red-200');
+        quizFeedbackTitle.innerHTML = `<span class="text-red-700">❌ Kurang Tepat</span>`;
+      }
+
+      quizFeedbackDesc.textContent = qData.explanation;
+      quizFeedbackBox.classList.remove('hidden');
+
+      const isLastQ = gameState.activeQuestionIndex >= npc.questions.length - 1;
+      btnNextLabel.textContent = isLastQ ? "Selesaikan Pos Ini" : "Soal Berikutnya";
+      btnNextQuestion.classList.remove('hidden');
+    }
+
+    btnNextQuestion.addEventListener('click', () => {
+      const npc = NPC_DATA.find(n => n.id === gameState.activeNpcId);
+      if (!npc) return;
+
+      if (gameState.activeQuestionIndex < npc.questions.length - 1) {
+        gameState.activeQuestionIndex += 1;
+        renderCurrentQuestion();
+      } else {
+        // Mark Pos Completed
+        gameState.completedPos[npc.id].completed = true;
+        markNpcCompletedVisuals(npc.id);
+        updateHUD();
+
+        quizModal.classList.add('hidden');
+        gameState.isModalOpen = false;
+        gameState.activeNpcId = null;
+
+        // Check if all 4 Pos are completed
+        const totalCompleted = Object.values(gameState.completedPos).filter(p => p.completed).length;
+        if (totalCompleted >= NPC_DATA.length) {
+          showFinalReportModal();
+        }
+      }
+    });
+
+    function markNpcCompletedVisuals(npcId) {
+      const entity = npcEntities.find(e => e.data.id === npcId);
+      if (!entity) return;
+
+      entity.beacon.material.color.setHex(0x10B981);
+      entity.beacon.material.emissive.setHex(0x059669);
+      entity.ring.material.color.setHex(0x10B981);
+
+      const pill = entity.labelEl.querySelector('.npc-status-pill');
+      if (pill) {
+        pill.textContent = "Selesai ✓";
+        pill.className = "npc-status-pill inline-block mt-1 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/25 text-emerald-300 border border-emerald-400/50";
+      }
+    }
+
+    btnCloseQuiz.addEventListener('click', () => {
+      // If user closes mid-way before finishing pos, reset points earned in this unfinished pos
+      const posId = gameState.activeNpcId;
+      if (posId && !gameState.completedPos[posId]?.completed) {
+        const earnedHere = (gameState.completedPos[posId]?.correctCount || 0) * getPointsPerQuestion();
+        gameState.score = Math.max(0, gameState.score - earnedHere);
+        gameState.completedPos[posId].correctCount = 0;
+        gameState.completedPos[posId].answers = [];
+        updateHUD();
+      }
+      quizModal.classList.add('hidden');
+      gameState.isModalOpen = false;
+      gameState.activeNpcId = null;
+    });
+
+    /**
+     * 9. FINAL REPORT CARD & DIRECT GOOGLE SHEETS SUBMISSION
+     */
+    const reportModal = document.getElementById('report-modal');
+    const btnSubmitTeacher = document.getElementById('btn-submit-teacher');
+    const btnSubmitLabel = document.getElementById('btn-submit-label');
+    const iconSubmitSend = document.getElementById('icon-submit-send');
+    const iconSubmitSpinner = document.getElementById('icon-submit-spinner');
+    const submitStatusBox = document.getElementById('submit-status-box');
+
+    function getPredicate(score) {
+      if (score >= 85) return { label: "Sangat Kompeten", style: "bg-emerald-100 text-emerald-700" };
+      if (score >= 70) return { label: "Kompeten", style: "bg-blue-100 text-blue-700" };
+      return { label: "Perlu Pengayaan", style: "bg-amber-100 text-amber-700" };
+    }
+
+    function showFinalReportModal() {
+      sfx.playVictory();
+      gameState.isModalOpen = true;
+      interactionPrompt.classList.add('hidden');
+
+      const finalScore = Math.round(gameState.score);
+      const pred = getPredicate(finalScore);
+
+      document.getElementById('report-name').textContent = gameState.studentName;
+      document.getElementById('report-class').textContent = gameState.studentClass;
+      document.getElementById('report-score').textContent = finalScore;
+
+      const predEl = document.getElementById('report-predicate');
+      predEl.textContent = pred.label;
+      predEl.className = `inline-block text-[11px] font-bold px-2.5 py-0.5 rounded-full mt-0.5 ${pred.style}`;
+
+      const breakdownEl = document.getElementById('report-breakdown');
+      breakdownEl.innerHTML = '';
+
+      NPC_DATA.forEach((npc) => {
+        const res = gameState.completedPos[npc.id] || { correctCount: 0 };
+        const pts = Math.round(res.correctCount * getPointsPerQuestion() * 10) / 10;
+        const row = document.createElement('div');
+        row.className = "flex items-center justify-between bg-slate-50 border border-slate-200/80 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm";
+        row.innerHTML = `
+          <div>
+            <span class="font-bold text-slate-800">${npc.role}</span>
+            <span class="block text-[11px] text-slate-500">${npc.name} • Benar ${res.correctCount}/${npc.questions.length} soal</span>
+          </div>
+          <span class="font-extrabold text-blue-700">${pts} Poin</span>
+        `;
+        breakdownEl.appendChild(row);
+      });
+
+      submitStatusBox.classList.add('hidden');
+      reportModal.classList.remove('hidden');
+    }
+
+    function buildSubmissionPayload() {
+      const finalScore = Math.round(gameState.score);
+      const ptsPerQ = getPointsPerQuestion();
+      const p1 = Math.round((gameState.completedPos["pos1"]?.correctCount || 0) * ptsPerQ * 10) / 10;
+      const p2 = Math.round((gameState.completedPos["pos2"]?.correctCount || 0) * ptsPerQ * 10) / 10;
+      const p3 = Math.round((gameState.completedPos["pos3"]?.correctCount || 0) * ptsPerQ * 10) / 10;
+      const p4 = Math.round((gameState.completedPos["pos4"]?.correctCount || 0) * ptsPerQ * 10) / 10;
+
+      const detailList = NPC_DATA.map((npc) => {
+        const posData = gameState.completedPos[npc.id] || { correctCount: 0, answers: [] };
+        const ansSummary = (posData.answers || [])
+          .map(a => `S${a.soalNo}:${a.benar ? "Benar" : "Salah"} (${a.dipilih})`)
+          .join("; ");
+        return `[${npc.role}: ${posData.correctCount}/${npc.questions.length} | ${ansSummary}]`;
+      });
+
+      return {
+        timestamp: new Date().toLocaleString("id-ID", { timeZone: "Asia/Jakarta" }),
+        nama: gameState.studentName,
+        kelas: gameState.studentClass,
+        skorTotal: finalScore,
+        pos1_branding: p1,
+        pos2_seo: p2,
+        pos3_pkk: p3,
+        pos4_sosmed: p4,
+        detailJawaban: detailList.join(" "),
+        emailGuru: TEACHER_EMAIL
+      };
+    }
+
+    btnSubmitTeacher.addEventListener('click', async () => {
+      if (gameState.hasSubmittedToTeacher) return;
+
+      const scriptUrl = resolveGoogleScriptUrl();
+      if (!scriptUrl) {
+        submitStatusBox.classList.remove('hidden', 'bg-emerald-50', 'border-emerald-200', 'text-emerald-800');
+        submitStatusBox.classList.add('bg-amber-50', 'border-amber-200', 'text-amber-800');
+        submitStatusBox.innerHTML = `⚠️ URL Web App Google Apps Script belum diatur oleh guru. Hubungi guru pengampu (<strong>${TEACHER_EMAIL}</strong>) untuk menempelkan link Spreadsheet.`;
+        return;
+      }
+
+      // Set Loading State
+      btnSubmitTeacher.disabled = true;
+      iconSubmitSend.classList.add('hidden');
+      iconSubmitSpinner.classList.remove('hidden');
+      btnSubmitLabel.textContent = "Mengirim ke Google Sheet...";
+      submitStatusBox.classList.add('hidden');
+
+      const payload = buildSubmissionPayload();
+
+      try {
+        await fetch(scriptUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+
+        // Lock Button on Success
+        gameState.hasSubmittedToTeacher = true;
+        iconSubmitSpinner.classList.add('hidden');
+        btnSubmitTeacher.classList.remove('bg-blue-600', 'hover:bg-blue-700', 'disabled:bg-slate-400');
+        btnSubmitTeacher.classList.add('bg-emerald-600', 'disabled:bg-emerald-600', 'text-white');
+        btnSubmitLabel.textContent = "Terkirim ke Guru ✓";
+
+        submitStatusBox.classList.remove('hidden', 'bg-amber-50', 'border-amber-200', 'text-amber-800', 'bg-red-50', 'border-red-200', 'text-red-800');
+        submitStatusBox.classList.add('bg-emerald-50', 'border-emerald-200', 'text-emerald-800');
+        submitStatusBox.innerHTML = `✅ Hasil berhasil dikirim ke Google Sheet Bu Ria (<strong>${TEACHER_EMAIL}</strong>)!`;
+        sfx.playVictory();
+      } catch (err) {
+        // Re-enable Button if Network Failed
+        btnSubmitTeacher.disabled = false;
+        iconSubmitSpinner.classList.add('hidden');
+        iconSubmitSend.classList.remove('hidden');
+        btnSubmitLabel.textContent = "Kirim Hasil ke Guru";
+
+        submitStatusBox.classList.remove('hidden', 'bg-emerald-50', 'border-emerald-200', 'text-emerald-800');
+        submitStatusBox.classList.add('bg-red-50', 'border-red-200', 'text-red-800');
+        submitStatusBox.textContent = "❌ Gagal terhubung ke server Google Sheet. Periksa koneksi internet lalu coba klik kirim lagi.";
+        sfx.playWrong();
+      }
+    });
+
+    /**
+     * 10. MINI RADAR & 2D PROJECTED NPC LABELS UPDATE
+     */
+    const radarCanvas = document.getElementById('radar-canvas');
+    const radarCtx = radarCanvas.getContext('2d');
+
+    function drawMiniRadar() {
+      const w = radarCanvas.width;
+      const h = radarCanvas.height;
+      const cx = w / 2;
+      const cy = h / 2;
+      const scale = 1.65;
+
+      radarCtx.clearRect(0, 0, w, h);
+
+      // Radar Background
+      radarCtx.fillStyle = "#0F172A";
+      radarCtx.fillRect(0, 0, w, h);
+
+      // Grid Rings
+      radarCtx.strokeStyle = "rgba(148, 163, 184, 0.2)";
+      radarCtx.lineWidth = 1;
+      radarCtx.beginPath();
+      radarCtx.arc(cx, cy, 24, 0, Math.PI * 2);
+      radarCtx.stroke();
+      radarCtx.beginPath();
+      radarCtx.arc(cx, cy, 46, 0, Math.PI * 2);
+      radarCtx.stroke();
+
+      // NPC Dots relative to player
+      npcEntities.forEach((entity) => {
+        const dx = (entity.data.position.x - player.root.position.x) * scale;
+        const dz = (entity.data.position.z - player.root.position.z) * scale;
+
+        // Rotate radar relative to cameraYaw so top of radar is camera forward
+        const cos = Math.cos(-cameraYaw);
+        const sin = Math.sin(-cameraYaw);
+        let rx = dx * cos - dz * sin;
+        let rz = dx * sin + dz * cos;
+
+        // Clamp within radar radius
+        const dist = Math.hypot(rx, rz);
+        const maxR = 48;
+        if (dist > maxR) {
+          rx = (rx / dist) * maxR;
+          rz = (rz / dist) * maxR;
+        }
+
+        const isDone = gameState.completedPos[entity.data.id]?.completed;
+        radarCtx.fillStyle = isDone ? "#34D399" : "#FBBF24";
+        radarCtx.beginPath();
+        radarCtx.arc(cx + rx, cy + rz, 4.5, 0, Math.PI * 2);
+        radarCtx.fill();
+      });
+
+      // Player Center Triangle
+      radarCtx.fillStyle = "#38BDF8";
+      radarCtx.beginPath();
+      radarCtx.moveTo(cx, cy - 6);
+      radarCtx.lineTo(cx - 4.5, cy + 5);
+      radarCtx.lineTo(cx + 4.5, cy + 5);
+      radarCtx.closePath();
+      radarCtx.fill();
+    }
+
+    const tempVec = new THREE.Vector3();
+    function updateNpcScreenLabels(time) {
+      npcEntities.forEach((entity, idx) => {
+        // Animate Beacon Float & Spin
+        entity.beacon.rotation.y = time * 2.2 + idx;
+        entity.beacon.position.y = 2.85 + Math.sin(time * 3 + idx) * 0.12;
+
+        // Subtle Idle Breathing on NPC
+        entity.charObj.headGroup.position.y = 1.98 + Math.sin(time * 2.5 + idx) * 0.02;
+
+        // Project 3D position above beacon to 2D screen
+        tempVec.set(entity.data.position.x, 3.3, entity.data.position.z);
+        tempVec.project(camera);
+
+        // Check if behind camera or far away
+        const distToPlayer = player.root.position.distanceTo(entity.charObj.root.position);
+        if (tempVec.z > 1 || distToPlayer > 36) {
+          entity.labelEl.style.opacity = "0";
+        } else {
+          const x = (tempVec.x * 0.5 + 0.5) * window.innerWidth;
+          const y = (-(tempVec.y * 0.5) + 0.5) * window.innerHeight;
+          entity.labelEl.style.transform = `translate(-50%, -100%) translate(${x}px, ${y}px)`;
+          entity.labelEl.style.opacity = "1";
+        }
+      });
+    }
+
+    /**
+     * 11. MAIN ANIMATION & GAME LOOP
+     */
+    const clock = new THREE.Clock();
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      const dt = Math.min(clock.getDelta(), 0.05);
+      const elapsedTime = clock.getElapsedTime();
+
+      // Movement Input Vector
+      let moveForward = 0;
+      let moveRight = 0;
+
+      if (gameState.isPlaying && !gameState.isModalOpen) {
+        if (keys.w || keys.ArrowUp) moveForward += 1;
+        if (keys.s || keys.ArrowDown) moveForward -= 1;
+        if (keys.d || keys.ArrowRight) moveRight += 1;
+        if (keys.a || keys.ArrowLeft) moveRight -= 1;
+
+        // Combine with touch joystick
+        if (Math.abs(touchMove.x) > 0.08 || Math.abs(touchMove.z) > 0.08) {
+          moveRight += touchMove.x;
+          moveForward -= touchMove.z;
+        }
+      }
+
+      const inputLen = Math.hypot(moveForward, moveRight);
+      if (inputLen > 0.01) {
+        const normF = moveForward / Math.max(1, inputLen);
+        const normR = moveRight / Math.max(1, inputLen);
+
+        // Convert camera-relative input into world X/Z velocity
+        const forwardX = -Math.sin(cameraYaw);
+        const forwardZ = -Math.cos(cameraYaw);
+        const rightX = Math.cos(cameraYaw);
+        const rightZ = -Math.sin(cameraYaw);
+
+        const vx = (forwardX * normF + rightX * normR);
+        const vz = (forwardZ * normF + rightZ * normR);
+
+        const speed = 8.2;
+        const nextX = player.root.position.x + vx * speed * dt;
+        const nextZ = player.root.position.z + vz * speed * dt;
+
+        // Slide along walls cleanly
+        if (!checkCollision(nextX, player.root.position.z)) {
+          player.root.position.x = nextX;
+        }
+        if (!checkCollision(player.root.position.x, nextZ)) {
+          player.root.position.z = nextZ;
+        }
+
+        // Smoothly rotate avatar toward movement direction
+        const targetAngle = Math.atan2(vx, vz);
+        let angleDiff = targetAngle - player.root.rotation.y;
+        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+        player.root.rotation.y += angleDiff * Math.min(1, dt * 14);
+
+        // Procedural Walking Limb Animation
+        const swing = Math.sin(elapsedTime * 12) * 0.65;
+        player.leftLegPivot.rotation.x = swing;
+        player.rightLegPivot.rotation.x = -swing;
+        player.leftArmPivot.rotation.x = -swing * 0.85;
+        player.rightArmPivot.rotation.x = swing * 0.85;
+        player.root.position.y = 0.12 + Math.abs(Math.sin(elapsedTime * 12)) * 0.07;
+      } else {
+        // Smooth Return to Idle Pose
+        player.leftLegPivot.rotation.x *= 0.8;
+        player.rightLegPivot.rotation.x *= 0.8;
+        player.leftArmPivot.rotation.x *= 0.8;
+        player.rightArmPivot.rotation.x *= 0.8;
+        player.root.position.y = 0.12;
+        player.headGroup.position.y = 1.98 + Math.sin(elapsedTime * 3) * 0.02;
+      }
+
+      // Third-Person Smooth Camera Follow
+      const camDist = 8.5;
+      const camHeight = 3.2 + Math.sin(cameraPitch) * 4.5;
+      const horizDist = camDist * Math.cos(cameraPitch);
+
+      const desiredCamX = player.root.position.x + Math.sin(cameraYaw) * horizDist;
+      const desiredCamZ = player.root.position.z + Math.cos(cameraYaw) * horizDist;
+      const desiredCamY = player.root.position.y + camHeight;
+
+      camera.position.lerp(new THREE.Vector3(desiredCamX, desiredCamY, desiredCamZ), Math.min(1, dt * 10));
+      camera.lookAt(
+        player.root.position.x,
+        player.root.position.y + 1.55,
+        player.root.position.z
+      );
+
+      // Check Proximity to Nearest Active NPC Teacher
+      if (gameState.isPlaying && !gameState.isModalOpen) {
+        let closestNpc = null;
+        let minDist = 3.6;
+
+        npcEntities.forEach((entity) => {
+          if (gameState.completedPos[entity.data.id]?.completed) return;
+          const dist = player.root.position.distanceTo(entity.charObj.root.position);
+          if (dist < minDist) {
+            minDist = dist;
+            closestNpc = entity;
+          }
+        });
+
+        gameState.nearbyNpc = closestNpc;
+        if (closestNpc) {
+          interactionText.textContent = `Bicara dengan ${closestNpc.data.name} (${closestNpc.data.role})`;
+          interactionPrompt.classList.remove('hidden');
+        } else {
+          interactionPrompt.classList.add('hidden');
+        }
+      }
+
+      // Update UI Overlays
+      updateNpcScreenLabels(elapsedTime);
+      if (gameState.isPlaying) {
+        drawMiniRadar();
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    // Handle Responsive Window Resize
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Start Engine Loop on Window Load
+    window.onload = function () {
+      animate();
+    };
+  </script>
+</body>
+</html>
