@@ -6,8 +6,10 @@
   <title>Petualangan Digital: SMKN 1 Cilegon</title>
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Three.js r128 -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- Babylon.js Engine -->
+  <script src="https://cdn.babylonjs.com/babylon.js"></script>
+  <!-- PeerJS for Serverless P2P Classroom Multiplayer -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <!-- Google Fonts: Inter -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <style>
@@ -23,15 +25,15 @@
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background-color: #0F172A;
+      background-color: #D9DDE2;
       touch-action: none;
     }
     #game-canvas {
       display: block;
       width: 100%;
       height: 100%;
+      outline: none;
     }
-    /* Custom scrollbar for quiz explanation if needed */
     ::-webkit-scrollbar {
       width: 6px;
     }
@@ -54,11 +56,11 @@
 </head>
 <body class="relative w-full h-full overflow-hidden">
 
-  <!-- 3D WebGL Canvas -->
+  <!-- 3D Babylon.js Canvas -->
   <canvas id="game-canvas"></canvas>
 
-  <!-- Floating 2D Screen Labels Container for NPCs -->
-  <div id="npc-labels-layer" class="pointer-events-none fixed inset-0 overflow-hidden z-10"></div>
+  <!-- Floating 2D Screen Labels Container (Ibu Ria, Book Symbols & Multiplayer Peers) -->
+  <div id="world-labels-layer" class="pointer-events-none fixed inset-0 overflow-hidden z-10"></div>
 
   <!-- =========================================================
        HUD OVERLAY (DITAMPILKAN SAAT EKSPLORASI)
@@ -68,14 +70,21 @@
     <!-- Top Bar: Student Info & Score (Left) + Radar & Sound (Right) -->
     <div class="flex items-start justify-between gap-3">
       <!-- Top-Left Card -->
-      <div class="pointer-events-auto bg-white/95 backdrop-blur-md border border-slate-200/80 shadow-lg rounded-2xl p-3 sm:p-4 max-w-[240px] sm:max-w-xs">
-        <div class="flex items-center gap-2.5 mb-2">
-          <div class="w-9 h-9 rounded-xl bg-blue-900 text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-sm">
-            SMK
+      <div class="pointer-events-auto bg-white/95 backdrop-blur-md border border-slate-200/80 shadow-lg rounded-2xl p-3 sm:p-4 max-w-[270px] sm:max-w-xs">
+        <div class="flex items-center justify-between gap-2 mb-2">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <div class="w-9 h-9 rounded-xl bg-blue-900 text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-sm">
+              SMK
+            </div>
+            <div class="min-w-0">
+              <h2 id="hud-student-name" class="text-slate-900 font-bold text-sm sm:text-base truncate">Nama Siswa</h2>
+              <p id="hud-student-class" class="text-xs font-medium text-blue-600 truncate">Kelas XI BD 1</p>
+            </div>
           </div>
-          <div class="min-w-0">
-            <h2 id="hud-student-name" class="text-slate-900 font-bold text-sm sm:text-base truncate">Nama Siswa</h2>
-            <p id="hud-student-class" class="text-xs font-medium text-blue-600 truncate">Kelas XI BD 1</p>
+          <!-- Multiplayer Class Status Pill -->
+          <div id="hud-mp-badge" class="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-1 rounded-lg text-[10px] font-bold shrink-0" title="Teman sekelas online">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span id="hud-mp-count">1 Online</span>
           </div>
         </div>
         <div class="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
@@ -85,9 +94,13 @@
             <span class="text-[11px] font-medium text-slate-400">/100</span>
           </div>
           <div class="bg-slate-50 rounded-xl px-2.5 py-1.5 border border-slate-200/60">
-            <span class="block text-[10px] uppercase tracking-wider font-semibold text-slate-400">Pos Misi</span>
-            <span id="hud-progress" class="text-base sm:text-lg font-extrabold text-emerald-600">0/4</span>
+            <span class="block text-[10px] uppercase tracking-wider font-semibold text-slate-400">Simbol Buku</span>
+            <span id="hud-progress" class="text-base sm:text-lg font-extrabold text-emerald-600">0/0</span>
           </div>
+        </div>
+        <!-- Quest Objective Banner -->
+        <div id="hud-quest-banner" class="mt-2.5 bg-amber-50 border border-amber-200/90 rounded-xl px-2.5 py-1.5 text-[11px] font-semibold text-amber-900 leading-snug">
+          🎯 Temui Ibu Ria di depan Gedung Utama untuk memulai petualangan!
         </div>
       </div>
 
@@ -100,19 +113,23 @@
             <span class="text-slate-500">•</span>
             <span class="px-1.5 py-0.5 bg-slate-700 rounded text-[11px] font-bold">Drag Mouse</span> Kamera
             <span class="text-slate-500">•</span>
-            <span class="px-1.5 py-0.5 bg-blue-600 rounded text-[11px] font-bold">E</span> Bicara
+            <span class="px-1.5 py-0.5 bg-blue-600 rounded text-[11px] font-bold">E</span> Interaksi
           </div>
 
           <!-- Mute / Unmute Button -->
           <button id="btn-toggle-audio" title="Suara Efek" class="pointer-events-auto w-10 h-10 rounded-xl bg-white/95 hover:bg-slate-100 text-slate-800 border border-slate-200 shadow-lg flex items-center justify-center transition active:scale-95">
-            <!-- Volume On Icon -->
             <svg id="icon-sound-on" class="w-5 h-5 text-blue-700" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M11 5L6 9H2v6h4l5 4V5zM15.54 8.46a5 5 0 010 7.07M19.07 4.93a10 10 0 010 14.14" />
             </svg>
-            <!-- Volume Off Icon -->
             <svg id="icon-sound-off" class="hidden w-5 h-5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M11 5L6 9H2v6h4l5 4V5zM23 9l-6 6M17 9l6 6" />
             </svg>
+          </button>
+
+          <!-- Scalable Graphics Quality Selector -->
+          <button id="btn-cycle-quality" title="Kualitas Grafis 3D" class="pointer-events-auto h-10 px-3 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-amber-300 border border-slate-700 shadow-lg flex items-center gap-1.5 text-xs font-extrabold tracking-wide transition active:scale-95 cursor-pointer">
+            <span>✨</span>
+            <span id="label-graphics-quality">ULTRA</span>
           </button>
         </div>
 
@@ -120,8 +137,9 @@
         <div class="pointer-events-auto bg-slate-900/90 backdrop-blur-md p-2 rounded-2xl border border-slate-700/80 shadow-xl">
           <canvas id="radar-canvas" width="116" height="116" class="rounded-xl block"></canvas>
           <div class="flex items-center justify-between text-[10px] text-slate-300 mt-1.5 px-1 font-medium">
-            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-amber-400 inline-block"></span>Aktif</span>
-            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-400 inline-block"></span>Selesai</span>
+            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-rose-400 inline-block"></span>Bu Ria</span>
+            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-amber-400 inline-block"></span>Buku</span>
+            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-violet-400 inline-block"></span>Teman</span>
           </div>
         </div>
       </div>
@@ -131,19 +149,22 @@
     <div id="interaction-prompt" class="hidden fixed bottom-28 sm:bottom-12 left-1/2 -translate-x-1/2 z-30 pointer-events-auto animate-prompt">
       <button id="btn-interact" class="flex items-center gap-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold px-5 py-3.5 rounded-2xl shadow-2xl border-2 border-white/90 transition cursor-pointer">
         <span class="w-7 h-7 rounded-lg bg-white text-blue-700 font-extrabold text-sm flex items-center justify-center shadow-sm">E</span>
-        <span id="interaction-text" class="text-sm sm:text-base whitespace-nowrap">Bicara dengan Guru</span>
+        <span id="interaction-text" class="text-sm sm:text-base whitespace-nowrap">Bicara dengan Ibu Ria</span>
       </button>
     </div>
 
     <!-- Bottom Controls for Touch / Mobile Devices -->
     <div class="flex items-end justify-between w-full sm:hidden pb-1">
-      <!-- Virtual D-Pad / Joystick -->
       <div id="touch-joystick-zone" class="pointer-events-auto relative w-28 h-28 rounded-full bg-slate-900/45 backdrop-blur-sm border-2 border-white/30 flex items-center justify-center">
         <div id="touch-joystick-knob" class="w-11 h-11 rounded-full bg-white/90 shadow-lg border-2 border-blue-600 pointer-events-none transition-transform duration-75"></div>
       </div>
-      <!-- Hint Swipe Camera -->
-      <div class="bg-slate-900/65 text-white/90 text-[11px] px-3 py-1.5 rounded-xl backdrop-blur-sm border border-white/15">
-        Geser layar untuk putar kamera
+      <div class="flex flex-col items-end gap-2">
+        <button id="btn-touch-jump" type="button" class="pointer-events-auto w-14 h-14 rounded-full bg-blue-600/90 active:bg-blue-700 text-white font-extrabold text-xs border-2 border-white/80 shadow-xl flex items-center justify-center">
+          LOMPAT
+        </button>
+        <div class="bg-slate-900/65 text-white/90 text-[11px] px-3 py-1.5 rounded-xl backdrop-blur-sm border border-white/15">
+          Geser layar putar kamera
+        </div>
       </div>
     </div>
   </div>
@@ -157,7 +178,7 @@
       <div class="bg-gradient-to-br from-slate-900 via-blue-900 to-blue-700 p-6 sm:p-7 text-white relative overflow-hidden">
         <div class="flex items-center justify-between gap-2 mb-3">
           <div class="inline-flex items-center gap-2 bg-white/15 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-semibold tracking-wide border border-white/20">
-            <span>🎓</span> SIMULASI EDUKASI 3D • BISNIS DIGITAL
+            <span>🎓</span> SIMULASI 3D MULTIPLAYER • BISNIS DIGITAL
           </div>
           <!-- Teacher Protected Panel Trigger -->
           <button
@@ -177,13 +198,12 @@
           <span class="text-amber-300">SMKN 1 Cilegon</span>
         </h1>
         <p class="text-blue-100 text-xs sm:text-sm mt-2 leading-relaxed">
-          Jelajahi lingkungan sekolah, temui 4 Guru Bisnis Digital di setiap pos, dan selesaikan tantangan kuis untuk meraih skor terbaik!
+          Jelajahi kampus bersama teman sekelas, temui Ibu Ria, selesaikan seluruh simbol buku tantangan, lalu serahkan hasilmu!
         </p>
       </div>
 
       <!-- Teacher PIN Gate & Protected Setup Panel -->
       <div id="sheet-setup-panel" class="hidden bg-slate-50 px-6 py-5 space-y-4 max-h-[65vh] overflow-y-auto">
-        <!-- Back to Student Menu Bar -->
         <div class="flex items-center justify-between border-b border-slate-200 pb-3">
           <button
             type="button"
@@ -271,7 +291,7 @@
               </button>
             </div>
             <p class="text-[11px] text-slate-500 leading-relaxed">
-              Unggah file <strong>.csv</strong> (dari Excel/Google Sheets) atau <strong>.json</strong> untuk mengganti soal pada Pos 1–4 secara otomatis:
+              Unggah file <strong>.csv</strong> atau <strong>.json</strong>. Sistem otomatis membagi setiap 10 soal menjadi 1 Simbol Buku 3D:
             </p>
             <div class="flex items-center gap-2">
               <input
@@ -285,7 +305,7 @@
               </button>
             </div>
             <div id="question-bank-status" class="text-[11px] font-medium text-slate-600 bg-white px-3 py-2 rounded-xl border border-slate-200">
-              Bank Soal Aktif: <strong>Bawaan (8 Soal / 4 Pos)</strong>
+              Bank Soal Aktif: <strong>Bawaan (10 Soal → 1 Simbol Buku)</strong>
             </div>
           </div>
 
@@ -309,7 +329,6 @@
           <p id="sheet-setup-feedback" class="hidden text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2"></p>
         </div>
 
-        <!-- Bottom Back Button inside Panel Guru -->
         <div class="pt-2 border-t border-slate-200">
           <button
             type="button"
@@ -324,7 +343,7 @@
         </div>
       </div>
 
-      <!-- Form Input -->
+      <!-- Form Input Siswa -->
       <form id="start-form" class="p-6 sm:p-7 space-y-4">
         <div>
           <label for="input-name" class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
@@ -342,7 +361,7 @@
 
         <div>
           <label for="input-class" class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
-            Kelas / Jurusan
+            Kelas / Room Multiplayer
           </label>
           <input
             type="text"
@@ -352,6 +371,41 @@
             placeholder="Contoh: XI BD 1"
             class="w-full px-4 py-3 rounded-xl border border-slate-300 text-slate-900 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition"
           />
+          <p class="text-[11px] text-slate-500 mt-1">Siswa dengan nama kelas yang sama otomatis terhubung dalam satu dunia 3D.</p>
+        </div>
+
+        <!-- Pilihan Avatar Pria & Wanita Berhijab -->
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+            Pilih Karakter Avatar
+          </label>
+          <div class="grid grid-cols-2 gap-3">
+            <label class="cursor-pointer">
+              <input type="radio" name="avatar-gender" value="male" checked class="peer sr-only" />
+              <div class="p-3 rounded-2xl border-2 border-slate-200 peer-checked:border-blue-600 peer-checked:bg-blue-50/70 transition flex items-center gap-2.5">
+                <div class="w-9 h-9 rounded-xl bg-blue-100 text-blue-800 flex items-center justify-center text-lg shrink-0">
+                  👦
+                </div>
+                <div>
+                  <span class="block text-xs font-extrabold text-slate-800">Siswa Pria</span>
+                  <span class="block text-[10px] text-slate-500">Seragam SMK</span>
+                </div>
+              </div>
+            </label>
+
+            <label class="cursor-pointer">
+              <input type="radio" name="avatar-gender" value="female" class="peer sr-only" />
+              <div class="p-3 rounded-2xl border-2 border-slate-200 peer-checked:border-blue-600 peer-checked:bg-blue-50/70 transition flex items-center gap-2.5">
+                <div class="w-9 h-9 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center text-lg shrink-0">
+                  🧕
+                </div>
+                <div>
+                  <span class="block text-xs font-extrabold text-slate-800">Siswi Wanita</span>
+                  <span class="block text-[10px] text-slate-500">Berhijab SMK</span>
+                </div>
+              </div>
+            </label>
+          </div>
         </div>
 
         <div id="start-error" class="hidden text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-xl px-3.5 py-2.5">
@@ -372,7 +426,70 @@
   </div>
 
   <!-- =========================================================
-       2. QUIZ MODAL (INTERAKSI DENGAN NPC GURU)
+       2. IBU RIA DIALOG MODAL (PEMBUKAAN, STATUS & PENGUMPULAN)
+  ========================================================== -->
+  <div id="iburia-modal" class="hidden fixed inset-0 z-40 bg-slate-900/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full overflow-hidden flex flex-col">
+      <!-- Header -->
+      <div class="bg-gradient-to-r from-amber-800 via-amber-700 to-amber-600 px-6 py-4 text-white flex items-center gap-3">
+        <div class="w-11 h-11 rounded-2xl bg-white/20 border border-white/30 flex items-center justify-center text-2xl shrink-0">
+          🧕
+        </div>
+        <div>
+          <span class="inline-block text-[10px] font-bold uppercase tracking-wider bg-white/20 px-2 py-0.5 rounded-md mb-0.5">
+            Guru Pembimbing • Bisnis Digital
+          </span>
+          <h3 class="text-lg font-extrabold leading-tight">Ibu Ria</h3>
+        </div>
+      </div>
+
+      <!-- Dialog Content -->
+      <div class="p-6 space-y-4">
+        <div class="bg-amber-50/80 border border-amber-200/80 rounded-2xl p-4 text-slate-800 text-sm leading-relaxed">
+          <p id="iburia-dialog-text" class="font-medium">
+            Selamat datang di Petualangan Digital! Hari ini kamu akan menjelajahi dunia pembelajaran dan menyelesaikan tantangan yang tersedia. Temukan seluruh simbol buku, jawab semua soal, kemudian kembali kepada Ibu untuk mengumpulkan jawabanmu.
+          </p>
+        </div>
+
+        <!-- Progress Summary Inside Ibu Ria Dialog -->
+        <div id="iburia-progress-box" class="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 space-y-2 text-xs">
+          <div class="flex items-center justify-between font-bold text-slate-700">
+            <span>Status Penyelesaian Simbol Buku:</span>
+            <span id="iburia-book-count" class="text-blue-700">0 / 0 Buku</span>
+          </div>
+          <div class="flex items-center justify-between font-bold text-slate-700">
+            <span>Total Soal Terjawab:</span>
+            <span id="iburia-question-count" class="text-emerald-700">0 / 0 Soal</span>
+          </div>
+          <div id="iburia-incomplete-warning" class="hidden pt-1.5 border-t border-slate-200 text-amber-800 font-semibold">
+            ⚠️ Selesaikan seluruh soal pada semua simbol buku terlebih dahulu sebelum mengumpulkan jawaban.
+          </div>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-3">
+        <button id="btn-iburia-close" type="button" class="text-xs sm:text-sm font-bold text-slate-600 hover:text-slate-900 px-4 py-2.5 rounded-xl border border-slate-300 bg-white transition cursor-pointer">
+          Tutup
+        </button>
+        <button id="btn-iburia-start-quest" type="button" class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm px-5 py-2.5 rounded-xl shadow-md transition flex items-center gap-2 cursor-pointer">
+          <span>Mulai Jelajahi Simbol Buku</span>
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+          </svg>
+        </button>
+        <button id="btn-iburia-collect" type="button" class="hidden bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm px-5 py-2.5 rounded-xl shadow-md shadow-emerald-600/25 transition flex items-center gap-2 cursor-pointer">
+          <span>Mengumpulkan</span>
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       3. QUIZ MODAL (INTERAKSI DENGAN SIMBOL BUKU 3D)
   ========================================================== -->
   <div id="quiz-modal" class="hidden fixed inset-0 z-40 bg-slate-900/75 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full overflow-hidden flex flex-col max-h-[92vh]">
@@ -381,32 +498,33 @@
       <div class="bg-gradient-to-r from-blue-900 to-blue-600 px-6 py-4 text-white flex items-center justify-between">
         <div>
           <span id="quiz-topic-badge" class="inline-block text-[11px] font-bold uppercase tracking-wider bg-white/20 px-2.5 py-0.5 rounded-md mb-1">
-            Topik Materi
+            Simbol Buku 1
           </span>
-          <h3 id="quiz-teacher-name" class="text-lg font-extrabold leading-snug">Bu Ria - Digital Branding</h3>
+          <h3 id="quiz-book-title" class="text-lg font-extrabold leading-snug">Buku 1 (Soal 1–10)</h3>
         </div>
         <div class="text-right shrink-0 ml-3">
           <span class="block text-[11px] text-blue-200 font-medium">Pertanyaan</span>
-          <span id="quiz-q-counter" class="text-base font-extrabold bg-slate-900/40 px-3 py-1 rounded-xl inline-block mt-0.5">1 / 2</span>
+          <span id="quiz-q-counter" class="text-base font-extrabold bg-slate-900/40 px-3 py-1 rounded-xl inline-block mt-0.5">1 / 10</span>
         </div>
       </div>
 
       <!-- Quiz Body -->
       <div class="p-6 overflow-y-auto space-y-4">
+        <div class="flex items-center justify-between text-[11px] font-semibold text-slate-500">
+          <span id="quiz-question-origin-id">ID Soal: #1</span>
+          <span id="quiz-question-topic">Materi: Bisnis Digital</span>
+        </div>
+
         <p id="quiz-question-text" class="text-slate-800 font-semibold text-base leading-relaxed">
           Pertanyaan akan muncul di sini...
         </p>
 
         <!-- Options List -->
-        <div id="quiz-options-container" class="space-y-2.5">
-          <!-- Buttons injected by JS -->
-        </div>
+        <div id="quiz-options-container" class="space-y-2.5"></div>
 
         <!-- Immediate Educational Feedback Box -->
         <div id="quiz-feedback-box" class="hidden rounded-2xl p-4 border text-sm leading-relaxed">
-          <div class="flex items-center gap-2 font-bold mb-1" id="quiz-feedback-title">
-            <!-- Status title -->
-          </div>
+          <div class="flex items-center gap-2 font-bold mb-1" id="quiz-feedback-title"></div>
           <p id="quiz-feedback-desc" class="text-slate-700 text-xs sm:text-sm"></p>
         </div>
       </div>
@@ -427,7 +545,7 @@
   </div>
 
   <!-- =========================================================
-       3. COMPLETION / REPORT CARD MODAL
+       4. COMPLETION / REPORT CARD MODAL (SETELAH MENGUMPULKAN KE IBU RIA)
   ========================================================== -->
   <div id="report-modal" class="hidden fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4">
     <div class="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full overflow-hidden flex flex-col max-h-[92vh]">
@@ -438,12 +556,11 @@
           🏆
         </div>
         <h2 class="text-xl sm:text-2xl font-extrabold tracking-tight">Laporan Hasil Petualangan</h2>
-        <p class="text-blue-200 text-xs sm:text-sm mt-1">SMKN 1 Cilegon • Kompetensi Keahlian Bisnis Digital</p>
+        <p class="text-blue-200 text-xs sm:text-sm mt-1">SMKN 1 Cilegon • Diserahkan kepada Ibu Ria</p>
       </div>
 
       <!-- Report Body -->
       <div class="p-6 overflow-y-auto space-y-4">
-        <!-- Student Summary Banner -->
         <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex items-center justify-between gap-4">
           <div>
             <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Peserta Didik</p>
@@ -459,12 +576,10 @@
           </div>
         </div>
 
-        <!-- Breakdown per Pos / Topik -->
+        <!-- Breakdown per Simbol Buku -->
         <div>
-          <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Rincian Capaian per Pos Guru</h4>
-          <div id="report-breakdown" class="space-y-2">
-            <!-- Injected by JS -->
-          </div>
+          <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Rincian Capaian per Simbol Buku</h4>
+          <div id="report-breakdown" class="space-y-2"></div>
         </div>
 
         <!-- Submission Status Banner -->
@@ -491,7 +606,8 @@
   </div>
 
   <!-- =========================================================
-       JAVASCRIPT: GAME ENGINE, 3D CAMPUS, QUIZ & AUDIO
+       JAVASCRIPT: BABYLON.JS ENGINE, ANATOMICAL CHARACTERS,
+       P2P CLASSROOM MULTIPLAYER, DYNAMIC BOOKS & QUIZ
   ========================================================== -->
   <script>
     /**
@@ -527,180 +643,221 @@
     }
 
     /**
-     * 1. BANK SOAL & DATA NPC GURU BISNIS DIGITAL SMKN 1 CILEGON
-     * Poin per soal dihitung otomatis (100 / total soal aktif) agar selalu maksimal 100.
+     * 1. BANK SOAL & PEMBAGIAN DINAMIS PER 10 SOAL -> SIMBOL BUKU 3D
      */
-    const DEFAULT_NPC_DATA = [
+    const DEFAULT_QUESTION_BANK = [
       {
-        id: "pos1",
-        name: "Bu Ria",
-        role: "Digital Branding",
-        fullTitle: "Bu Ria - Digital Branding",
-        locationLabel: "Depan Gedung Utama",
-        position: { x: 0, z: -13 },
-        rotationY: 0,
-        shirtColor: 0x2563EB, // Royal Blue
-        hairColor: 0x1E293B,
-        questions: [
-          {
-            question: "Elemen visual dan emosional yang membedakan produk UMKM siswa SMK dari kompetitor di platform digital disebut...",
-            options: [
-              "Brand Identity & Positioning",
-              "Bounce Rate Website",
-              "Server Hosting Bandwidth",
-              "Cost Per Mille (CPM)"
-            ],
-            correctIndex: 0,
-            explanation: "Brand Identity (logo, warna, tipografi, tone suara) dan Positioning membangun persepsi unik di benak konsumen."
-          },
-          {
-            question: "Mengapa konsistensi 'Tone of Voice' dan palet warna sangat penting dalam membangun Digital Branding di Instagram & TikTok?",
-            options: [
-              "Agar ukuran file gambar menjadi lebih kecil",
-              "Meningkatkan Brand Recall (ingatan merek) dan kepercayaan audiens",
-              "Menghindari biaya iklan berbayar sepenuhnya",
-              "Supaya akun tidak perlu membuat konten video"
-            ],
-            correctIndex: 1,
-            explanation: "Konsistensi visual dan gaya bahasa membuat audiens langsung mengenali merek kita dalam hitungan detik saat scrolling."
-          }
-        ]
+        id: "Q01",
+        topic: "Digital Branding",
+        question: "Elemen visual dan emosional yang membedakan produk UMKM siswa SMK dari kompetitor di platform digital disebut...",
+        options: [
+          "Brand Identity & Positioning",
+          "Bounce Rate Website",
+          "Server Hosting Bandwidth",
+          "Cost Per Mille (CPM)"
+        ],
+        correctIndex: 0,
+        explanation: "Brand Identity (logo, warna, tipografi, tone suara) dan Positioning membangun persepsi unik di benak konsumen."
       },
       {
-        id: "pos2",
-        name: "Pak Dimas",
-        role: "SEO & SEM",
-        fullTitle: "Pak Dimas - SEO & SEM",
-        locationLabel: "Depan Lab Bisnis Digital",
-        position: { x: 18, z: -3 },
-        rotationY: -Math.PI / 2,
-        shirtColor: 0x0D9488, // Teal
-        hairColor: 0x0F172A,
-        questions: [
-          {
-            question: "Perbedaan mendasar antara SEO (Search Engine Optimization) dan SEM (Search Engine Marketing) adalah...",
-            options: [
-              "SEO hanya untuk media sosial, SEM hanya untuk marketplace",
-              "SEO mengoptimalkan trafik organik gratis jangka panjang, sedangkan SEM menggunakan iklan berbayar (PPC)",
-              "SEO tidak memerlukan riset kata kunci, sedangkan SEM wajib",
-              "SEM tidak bisa menargetkan lokasi kota tertentu seperti Cilegon"
-            ],
-            correctIndex: 1,
-            explanation: "SEO berfokus pada optimasi konten & teknis agar tampil organik di halaman pertama Google, sedangkan SEM memakai iklan berbayar (Google Ads)."
-          },
-          {
-            question: "Contoh penerapan 'On-Page SEO' yang tepat pada artikel blog toko online adalah...",
-            options: [
-              "Membeli ribuan tautan spam dari situs luar negeri",
-              "Menempatkan kata kunci utama pada Title Tag, Heading (H1/H2), dan Meta Description secara natural",
-              "Menyembunyikan teks kata kunci dengan warna putih di latar putih",
-              "Mengunggah gambar berukuran 10 MB tanpa Alt Text"
-            ],
-            correctIndex: 1,
-            explanation: "On-Page SEO mencakup optimasi struktur judul, meta deskripsi, URL ramah pembaca, dan Alt Text gambar di dalam halaman web."
-          }
-        ]
+        id: "Q02",
+        topic: "Digital Branding",
+        question: "Mengapa konsistensi 'Tone of Voice' dan palet warna sangat penting dalam membangun Digital Branding di Instagram & TikTok?",
+        options: [
+          "Agar ukuran file gambar menjadi lebih kecil",
+          "Meningkatkan Brand Recall (ingatan merek) dan kepercayaan audiens",
+          "Menghindari biaya iklan berbayar sepenuhnya",
+          "Supaya akun tidak perlu membuat konten video"
+        ],
+        correctIndex: 1,
+        explanation: "Konsistensi visual dan gaya bahasa membuat audiens langsung mengenali merek kita dalam hitungan detik saat scrolling."
       },
       {
-        id: "pos3",
-        name: "Bu Sari",
-        role: "Kewirausahaan (PKK)",
-        fullTitle: "Bu Sari - Kewirausahaan (PKK)",
-        locationLabel: "Taman Belajar",
-        position: { x: -18, z: 4 },
-        rotationY: Math.PI / 2,
-        shirtColor: 0xD97706, // Amber Gold
-        hairColor: 0x334155,
-        questions: [
-          {
-            question: "Dalam Business Model Canvas (BMC), blok yang menjelaskan manfaat unik produk kita untuk menyelesaikan masalah pelanggan disebut...",
-            options: [
-              "Key Partnerships",
-              "Value Propositions (Proposisi Nilai)",
-              "Cost Structure",
-              "Key Resources"
-            ],
-            correctIndex: 1,
-            explanation: "Value Propositions adalah alasan utama mengapa pelanggan memilih produk/jasa kita dibanding pesaing."
-          },
-          {
-            question: "Sebuah tim PKK SMK memproduksi keripik bandeng khas Banten dengan total biaya produksi Rp500.000 untuk 50 kemasan. Jika ingin margin keuntungan 40% dari HPP, berapa harga jual per kemasan?",
-            options: [
-              "Rp10.000",
-              "Rp12.000",
-              "Rp14.000",
-              "Rp15.000"
-            ],
-            correctIndex: 2,
-            explanation: "HPP per kemasan = Rp500.000 / 50 = Rp10.000. Keuntungan 40% = Rp4.000. Jadi harga jual = Rp10.000 + Rp4.000 = Rp14.000."
-          }
-        ]
+        id: "Q03",
+        topic: "SEO & SEM",
+        question: "Perbedaan mendasar antara SEO (Search Engine Optimization) dan SEM (Search Engine Marketing) adalah...",
+        options: [
+          "SEO hanya untuk media sosial, SEM hanya untuk marketplace",
+          "SEO mengoptimalkan trafik organik gratis jangka panjang, sedangkan SEM menggunakan iklan berbayar (PPC)",
+          "SEO tidak memerlukan riset kata kunci, sedangkan SEM wajib",
+          "SEM tidak bisa menargetkan lokasi kota tertentu seperti Cilegon"
+        ],
+        correctIndex: 1,
+        explanation: "SEO berfokus pada optimasi konten & teknis agar tampil organik di halaman pertama Google, sedangkan SEM memakai iklan berbayar (Google Ads)."
       },
       {
-        id: "pos4",
-        name: "Pak Reza",
-        role: "Social Media Marketing",
-        fullTitle: "Pak Reza - Social Media Marketing",
-        locationLabel: "Kantin Digital",
-        position: { x: 14, z: 16 },
-        rotationY: -Math.PI * 0.75,
-        shirtColor: 0x7C3AED, // Violet
-        hairColor: 0x1E293B,
-        questions: [
-          {
-            question: "Dalam pembuatan konten video pendek (Reels/TikTok), bagian 3 detik pertama yang bertujuan menahan penonton agar tidak melakukan scroll disebut...",
-            options: [
-              "Call to Action (CTA)",
-              "Hook",
-              "Hashtag Strategy",
-              "Insight Analytics"
-            ],
-            correctIndex: 1,
-            explanation: "Hook adalah pancingan visual atau kalimat pembuka di 3 detik pertama untuk menarik perhatian audiens secara instan."
-          },
-          {
-            question: "Metrik yang paling akurat untuk mengukur seberapa aktif audiens berinteraksi (like, komentar, share, save) dibanding jumlah jangkauan adalah...",
-            options: [
-              "Engagement Rate (ER)",
-              "Impressions",
-              "Follower Count",
-              "Page Views"
-            ],
-            correctIndex: 0,
-            explanation: "Engagement Rate mengukur rasio interaksi nyata audiens terhadap konten, yang jauh lebih bernilai daripada sekadar jumlah pengikut."
-          }
-        ]
+        id: "Q04",
+        topic: "SEO & SEM",
+        question: "Contoh penerapan 'On-Page SEO' yang tepat pada artikel blog toko online adalah...",
+        options: [
+          "Membeli ribuan tautan spam dari situs luar negeri",
+          "Menempatkan kata kunci utama pada Title Tag, Heading (H1/H2), dan Meta Description secara natural",
+          "Menyembunyikan teks kata kunci dengan warna putih di latar putih",
+          "Mengunggah gambar berukuran 10 MB tanpa Alt Text"
+        ],
+        correctIndex: 1,
+        explanation: "On-Page SEO mencakup optimasi struktur judul, meta deskripsi, URL ramah pembaca, dan Alt Text gambar di dalam halaman web."
+      },
+      {
+        id: "Q05",
+        topic: "Kewirausahaan (PKK)",
+        question: "Dalam Business Model Canvas (BMC), blok yang menjelaskan manfaat unik produk kita untuk menyelesaikan masalah pelanggan disebut...",
+        options: [
+          "Key Partnerships",
+          "Value Propositions (Proposisi Nilai)",
+          "Cost Structure",
+          "Key Resources"
+        ],
+        correctIndex: 1,
+        explanation: "Value Propositions adalah alasan utama mengapa pelanggan memilih produk/jasa kita dibanding pesaing."
+      },
+      {
+        id: "Q06",
+        topic: "Kewirausahaan (PKK)",
+        question: "Sebuah tim PKK SMK memproduksi keripik bandeng khas Banten dengan total biaya produksi Rp500.000 untuk 50 kemasan. Jika ingin margin keuntungan 40% dari HPP, berapa harga jual per kemasan?",
+        options: [
+          "Rp10.000",
+          "Rp12.000",
+          "Rp14.000",
+          "Rp15.000"
+        ],
+        correctIndex: 2,
+        explanation: "HPP per kemasan = Rp500.000 / 50 = Rp10.000. Keuntungan 40% = Rp4.000. Jadi harga jual = Rp10.000 + Rp4.000 = Rp14.000."
+      },
+      {
+        id: "Q07",
+        topic: "Social Media Marketing",
+        question: "Dalam pembuatan konten video pendek (Reels/TikTok), bagian 3 detik pertama yang bertujuan menahan penonton agar tidak melakukan scroll disebut...",
+        options: [
+          "Call to Action (CTA)",
+          "Hook",
+          "Hashtag Strategy",
+          "Insight Analytics"
+        ],
+        correctIndex: 1,
+        explanation: "Hook adalah pancingan visual atau kalimat pembuka di 3 detik pertama untuk menarik perhatian audiens secara instan."
+      },
+      {
+        id: "Q08",
+        topic: "Social Media Marketing",
+        question: "Metrik yang paling akurat untuk mengukur seberapa aktif audiens berinteraksi (like, komentar, share, save) dibanding jumlah jangkauan adalah...",
+        options: [
+          "Engagement Rate (ER)",
+          "Impressions",
+          "Follower Count",
+          "Page Views"
+        ],
+        correctIndex: 0,
+        explanation: "Engagement Rate mengukur rasio interaksi nyata audiens terhadap konten, yang jauh lebih bernilai daripada sekadar jumlah pengikut."
+      },
+      {
+        id: "Q09",
+        topic: "E-Commerce & Marketplace",
+        question: "Strategi menampilkan produk pelengkap (misalnya menawarkan pouch atau baterai saat pembeli memilih kamera) disebut...",
+        options: [
+          "Cross-Selling",
+          "Flash Sale",
+          "Dropshipping",
+          "Retargeting Ads"
+        ],
+        correctIndex: 0,
+        explanation: "Cross-selling mendorong pelanggan membeli produk pelengkap yang relevan untuk meningkatkan nilai rata-rata transaksi."
+      },
+      {
+        id: "Q10",
+        topic: "Digital Analytics",
+        question: "Persentase pengunjung toko online yang langsung meninggalkan halaman tanpa melakukan klik atau interaksi apa pun disebut...",
+        options: [
+          "Conversion Rate",
+          "Bounce Rate",
+          "Click-Through Rate (CTR)",
+          "Return on Ad Spend (ROAS)"
+        ],
+        correctIndex: 1,
+        explanation: "Bounce Rate menunjukkan persentase pengunjung yang keluar setelah hanya membuka satu halaman tanpa berinteraksi lebih lanjut."
       }
     ];
 
-    // Clone default data and merge custom uploaded questions if present in localStorage
-    const NPC_DATA = JSON.parse(JSON.stringify(DEFAULT_NPC_DATA));
+    let activeQuestionBank = [];
+    let bookGroups = [];
 
-    function applySavedCustomQuestions() {
+    const BOOK_SPAWN_COORDINATES = [
+      { x: 16, z: -5, label: "Depan Lab Bisnis Digital" },
+      { x: -16, z: 3, label: "Taman Belajar" },
+      { x: 13, z: 14, label: "Kantin Digital" },
+      { x: -13, z: -13, label: "Selasar Utara" },
+      { x: -14, z: 16, label: "Taman Selatan" },
+      { x: 18, z: -15, label: "Koridor Timur" },
+      { x: 0, z: 22, label: "Gerbang Utama" },
+      { x: -20, z: -6, label: "Ruang Praktik PKK" }
+    ];
+
+    function loadQuestionBankFromStorage() {
       const raw = localStorage.getItem(STORAGE_KEY_CUSTOM_QUESTIONS);
-      if (!raw) return false;
-      try {
-        const customMap = JSON.parse(raw);
-        let applied = false;
-        NPC_DATA.forEach((npc, idx) => {
-          const defaultNpc = DEFAULT_NPC_DATA[idx];
-          if (customMap[npc.id] && Array.isArray(customMap[npc.id]) && customMap[npc.id].length > 0) {
-            npc.questions = customMap[npc.id];
-            applied = true;
-          } else {
-            npc.questions = JSON.parse(JSON.stringify(defaultNpc.questions));
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            activeQuestionBank = parsed.map((q, idx) => ({
+              id: q.id || `Q${String(idx + 1).padStart(2, '0')}`,
+              topic: q.topic || "Bisnis Digital",
+              question: q.question,
+              options: q.options,
+              correctIndex: typeof q.correctIndex === 'number' ? q.correctIndex : 0,
+              explanation: q.explanation || "Jawaban telah dicatat oleh sistem."
+            }));
+            return;
           }
+        } catch (e) {}
+      }
+      activeQuestionBank = JSON.parse(JSON.stringify(DEFAULT_QUESTION_BANK));
+    }
+
+    function buildDynamicBookGroups() {
+      const totalQuestions = activeQuestionBank.length;
+      const totalBooks = Math.ceil(totalQuestions / 10);
+      bookGroups = [];
+
+      for (let bIdx = 0; bIdx < totalBooks; bIdx++) {
+        const startIdx = bIdx * 10;
+        const endIdx = Math.min(startIdx + 10, totalQuestions);
+        const slice = activeQuestionBank.slice(startIdx, endIdx).map((q, offset) => ({
+          ...q,
+          originalIndex: startIdx + offset + 1
+        }));
+
+        if (slice.length === 0) continue;
+
+        let pos;
+        if (bIdx < BOOK_SPAWN_COORDINATES.length) {
+          pos = BOOK_SPAWN_COORDINATES[bIdx];
+        } else {
+          const angle = (bIdx / totalBooks) * Math.PI * 2;
+          pos = {
+            x: Math.round(Math.cos(angle) * 18),
+            z: Math.round(Math.sin(angle) * 18),
+            label: `Area Kampus #${bIdx + 1}`
+          };
+        }
+
+        bookGroups.push({
+          id: `book_${bIdx + 1}`,
+          bookNumber: bIdx + 1,
+          title: `Buku ${bIdx + 1}`,
+          rangeLabel: `Soal ${startIdx + 1}–${endIdx}`,
+          locationLabel: pos.label,
+          position: { x: pos.x, z: pos.z },
+          questions: slice
         });
-        return applied;
-      } catch (e) {
-        return false;
       }
     }
-    applySavedCustomQuestions();
+
+    loadQuestionBankFromStorage();
+    buildDynamicBookGroups();
 
     function getPointsPerQuestion() {
-      const totalQuestions = NPC_DATA.reduce((sum, npc) => sum + npc.questions.length, 0);
-      return totalQuestions > 0 ? 100 / totalQuestions : 0;
+      const totalQ = activeQuestionBank.length;
+      return totalQ > 0 ? 100 / totalQ : 0;
     }
 
     /**
@@ -715,9 +872,7 @@
       init() {
         if (!this.ctx) {
           const AudioContext = window.AudioContext || window.webkitAudioContext;
-          if (AudioContext) {
-            this.ctx = new AudioContext();
-          }
+          if (AudioContext) this.ctx = new AudioContext();
         }
         if (this.ctx && this.ctx.state === 'suspended') {
           this.ctx.resume();
@@ -753,14 +908,14 @@
       }
 
       playInteract() {
-        this.playTone(523.25, 'sine', 0.15, 0.12, 0);     // C5
-        this.playTone(659.25, 'sine', 0.2, 0.12, 0.08);   // E5
+        this.playTone(523.25, 'sine', 0.15, 0.12, 0);
+        this.playTone(659.25, 'sine', 0.2, 0.12, 0.08);
       }
 
       playCorrect() {
-        this.playTone(523.25, 'triangle', 0.16, 0.14, 0);    // C5
-        this.playTone(659.25, 'triangle', 0.16, 0.14, 0.09); // E5
-        this.playTone(783.99, 'triangle', 0.28, 0.16, 0.18); // G5
+        this.playTone(523.25, 'triangle', 0.16, 0.14, 0);
+        this.playTone(659.25, 'triangle', 0.16, 0.14, 0.09);
+        this.playTone(783.99, 'triangle', 0.28, 0.16, 0.18);
       }
 
       playWrong() {
@@ -786,50 +941,156 @@
       isModalOpen: false,
       studentName: "",
       studentClass: "",
+      avatarGender: "male",
+      questStartedByIbuRia: false,
+      allBooksCompleted: false,
       score: 0,
-      completedPos: {}, // { pos1: { completed: true, correctCount: 2, answers: [] } }
-      activeNpcId: null,
+      completedBooks: {},
+      activeBookId: null,
       activeQuestionIndex: 0,
       hasAnsweredCurrent: false,
-      nearbyNpc: null,
+      nearbyTarget: null,
       hasSubmittedToTeacher: false
     };
 
     /**
-     * 4. THREE.JS 3D SCENE, LIGHTING & CAMPUS ENVIRONMENT SETUP
+     * 4. BABYLON.JS ENGINE, SCENE, LIGHTING & CAMPUS ENVIRONMENT
      */
     const canvas = document.getElementById('game-canvas');
-    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    const engine = new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true, powerPreference: "high-performance" });
+    const scene = new BABYLON.Scene(engine);
+    scene.clearColor = new BABYLON.Color4(0.68, 0.85, 0.98, 1.0);
+    scene.fogMode = BABYLON.Scene.FOGMODE_EXP2;
+    scene.fogColor = new BABYLON.Color3(0.75, 0.88, 0.98);
+    scene.fogDensity = 0.0058;
 
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xBAE6FD);
-    scene.fog = new THREE.FogExp2(0xBAE6FD, 0.0085);
+    // Main Third-Person Camera (Initialized before post-processing pipeline)
+    const camera = new BABYLON.FreeCamera("mainCam", new BABYLON.Vector3(0, 6, 22), scene);
+    camera.fov = 0.92;
+    camera.minZ = 0.1;
+    camera.maxZ = 220;
 
-    const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 200);
-    camera.position.set(0, 6, 26);
+    // Cinematic Sky Dome & Sun Disc
+    const skyDome = BABYLON.MeshBuilder.CreateSphere("skyDome", { diameter: 260, segments: 32, sideOrientation: BABYLON.Mesh.BACKSIDE }, scene);
+    const skyTex = new BABYLON.DynamicTexture("skyTex", { width: 512, height: 512 }, scene, false);
+    const skyCtx = skyTex.getContext();
+    const skyGrad = skyCtx.createLinearGradient(0, 0, 0, 512);
+    skyGrad.addColorStop(0.0, "#1E40AF");
+    skyGrad.addColorStop(0.32, "#3B82F6");
+    skyGrad.addColorStop(0.55, "#93C5FD");
+    skyGrad.addColorStop(0.72, "#E0F2FE");
+    skyGrad.addColorStop(1.0, "#F8FAFC");
+    skyCtx.fillStyle = skyGrad;
+    skyCtx.fillRect(0, 0, 512, 512);
+    // Soft painted clouds
+    skyCtx.fillStyle = "rgba(255, 255, 255, 0.35)";
+    for (let c = 0; c < 28; c++) {
+      const cx = (c * 73) % 512;
+      const cy = 170 + ((c * 37) % 120);
+      skyCtx.beginPath();
+      skyCtx.ellipse(cx, cy, 42 + (c % 25), 11 + (c % 8), 0, 0, Math.PI * 2);
+      skyCtx.fill();
+    }
+    skyTex.update();
+    const skyMat = new BABYLON.StandardMaterial("skyMat", scene);
+    skyMat.diffuseTexture = skyTex;
+    skyMat.emissiveTexture = skyTex;
+    skyMat.disableLighting = true;
+    skyMat.fogEnabled = false;
+    skyDome.material = skyMat;
 
-    // Lighting
-    const hemiLight = new THREE.HemisphereLight(0xFFFFFF, 0x334155, 0.85);
-    hemiLight.position.set(0, 40, 0);
-    scene.add(hemiLight);
+    // Warm Golden Sun & Subtle Glow Layer
+    const sunSphere = BABYLON.MeshBuilder.CreateSphere("sunDisc", { diameter: 9, segments: 16 }, scene);
+    sunSphere.position = new BABYLON.Vector3(55, 68, 48);
+    const sunMat = new BABYLON.StandardMaterial("sunMat", scene);
+    sunMat.emissiveColor = new BABYLON.Color3(1.0, 0.93, 0.75);
+    sunMat.disableLighting = true;
+    sunMat.fogEnabled = false;
+    sunSphere.material = sunMat;
 
-    const dirLight = new THREE.DirectionalLight(0xFFFBEB, 1.05);
-    dirLight.position.set(28, 42, 24);
-    dirLight.castShadow = true;
-    dirLight.shadow.mapSize.width = 2048;
-    dirLight.shadow.mapSize.height = 2048;
-    dirLight.shadow.camera.near = 5;
-    dirLight.shadow.camera.far = 120;
-    const d = 42;
-    dirLight.shadow.camera.left = -d;
-    dirLight.shadow.camera.right = d;
-    dirLight.shadow.camera.top = d;
-    dirLight.shadow.camera.bottom = -d;
-    scene.add(dirLight);
+    const glowLayer = new BABYLON.GlowLayer("glowLayer", scene, {
+      mainTextureFixedSize: 512,
+      blurKernelSize: 32
+    });
+    glowLayer.intensity = 0.45;
+
+    // Cinematic Three-Point Environmental Lighting & Soft Shadows
+    const hemiLight = new BABYLON.HemisphericLight("hemiLight", new BABYLON.Vector3(0, 1, 0), scene);
+    hemiLight.intensity = 0.78;
+    hemiLight.diffuse = new BABYLON.Color3(0.96, 0.98, 1.0);
+    hemiLight.groundColor = new BABYLON.Color3(0.42, 0.46, 0.52);
+
+    const dirLight = new BABYLON.DirectionalLight("dirLight", new BABYLON.Vector3(-0.55, -1, -0.45), scene);
+    dirLight.position = new BABYLON.Vector3(32, 52, 28);
+    dirLight.intensity = 1.25;
+    dirLight.diffuse = new BABYLON.Color3(1.0, 0.96, 0.88);
+
+    const rimLight = new BABYLON.DirectionalLight("rimLight", new BABYLON.Vector3(0.5, -0.6, 0.6), scene);
+    rimLight.intensity = 0.32;
+    rimLight.diffuse = new BABYLON.Color3(0.65, 0.82, 1.0);
+
+    const shadowGenerator = new BABYLON.ShadowGenerator(2048, dirLight);
+    shadowGenerator.usePercentageCloserFiltering = true;
+    shadowGenerator.filteringQuality = BABYLON.ShadowGenerator.QUALITY_HIGH;
+    shadowGenerator.bias = 0.0005;
+
+    // AAA Post-Processing Pipeline (ACES Tone Mapping, Subtle Bloom, FXAA)
+    const defaultPipeline = new BABYLON.DefaultRenderingPipeline("defaultPipeline", true, scene, [camera]);
+    defaultPipeline.fxaaEnabled = true;
+    defaultPipeline.bloomEnabled = true;
+    defaultPipeline.bloomThreshold = 0.82;
+    defaultPipeline.bloomWeight = 0.22;
+    defaultPipeline.bloomKernel = 48;
+    defaultPipeline.bloomScale = 0.5;
+    defaultPipeline.imageProcessingEnabled = true;
+    defaultPipeline.imageProcessing.toneMappingEnabled = true;
+    defaultPipeline.imageProcessing.toneMappingType = BABYLON.ImageProcessingConfiguration.TONEMAPPING_ACES;
+    defaultPipeline.imageProcessing.contrast = 1.08;
+    defaultPipeline.imageProcessing.exposure = 1.04;
+
+    // Scalable Graphics Quality Presets (ULTRA / HIGH / MEDIUM / LOW)
+    const QUALITY_LEVELS = ["ULTRA", "HIGH", "MEDIUM", "LOW"];
+    let currentQualityIndex = 0;
+
+    function applyGraphicsQuality(levelName) {
+      const labelEl = document.getElementById('label-graphics-quality');
+      if (labelEl) labelEl.textContent = levelName;
+
+      if (levelName === "ULTRA") {
+        engine.setHardwareScalingLevel(1 / Math.min(window.devicePixelRatio || 1, 2));
+        shadowGenerator.mapSize = 2048;
+        defaultPipeline.fxaaEnabled = true;
+        defaultPipeline.bloomEnabled = true;
+        glowLayer.isEnabled = true;
+      } else if (levelName === "HIGH") {
+        engine.setHardwareScalingLevel(1.0);
+        shadowGenerator.mapSize = 1024;
+        defaultPipeline.fxaaEnabled = true;
+        defaultPipeline.bloomEnabled = true;
+        glowLayer.isEnabled = true;
+      } else if (levelName === "MEDIUM") {
+        engine.setHardwareScalingLevel(1.25);
+        shadowGenerator.mapSize = 1024;
+        defaultPipeline.fxaaEnabled = true;
+        defaultPipeline.bloomEnabled = false;
+        glowLayer.isEnabled = true;
+      } else {
+        engine.setHardwareScalingLevel(1.5);
+        shadowGenerator.mapSize = 512;
+        defaultPipeline.fxaaEnabled = false;
+        defaultPipeline.bloomEnabled = false;
+        glowLayer.isEnabled = false;
+      }
+    }
+
+    const btnCycleQuality = document.getElementById('btn-cycle-quality');
+    if (btnCycleQuality) {
+      btnCycleQuality.addEventListener('click', () => {
+        currentQualityIndex = (currentQualityIndex + 1) % QUALITY_LEVELS.length;
+        applyGraphicsQuality(QUALITY_LEVELS[currentQualityIndex]);
+        sfx.playInteract();
+      });
+    }
 
     // Colliders Array (AABB)
     const colliders = [];
@@ -853,290 +1114,1567 @@
       return false;
     }
 
-    // Ground & Pathways
-    const groundGeo = new THREE.PlaneGeometry(84, 84);
-    const groundMat = new THREE.MeshStandardMaterial({ color: 0x4ADE80, roughness: 0.9 });
-    const ground = new THREE.Mesh(groundGeo, groundMat);
-    ground.rotation.x = -Math.PI / 2;
-    ground.receiveShadow = true;
-    scene.add(ground);
+    // Procedural High-Detail Interlocking Paving Block & Grass PBR Textures
+    function createCampusFloorTexture() {
+      const tex = new BABYLON.DynamicTexture("floorTex", { width: 512, height: 512 }, scene, true);
+      const ctx = tex.getContext();
+      ctx.fillStyle = "#D4D9E0";
+      ctx.fillRect(0, 0, 512, 512);
 
-    // Central Paved Courtyard
-    const courtGeo = new THREE.BoxGeometry(36, 0.12, 34);
-    const courtMat = new THREE.MeshStandardMaterial({ color: 0xCBD5E1, roughness: 0.85 });
-    const court = new THREE.Mesh(courtGeo, courtMat);
-    court.position.set(0, 0.06, 2);
-    court.receiveShadow = true;
-    scene.add(court);
-
-    // Walkways to Buildings
-    const pathMat = new THREE.MeshStandardMaterial({ color: 0xE2E8F0, roughness: 0.8 });
-    const northPath = new THREE.Mesh(new THREE.BoxGeometry(8, 0.13, 14), pathMat);
-    northPath.position.set(0, 0.065, -14);
-    northPath.receiveShadow = true;
-    scene.add(northPath);
-
-    const eastWestPath = new THREE.Mesh(new THREE.BoxGeometry(46, 0.13, 6), pathMat);
-    eastWestPath.position.set(0, 0.065, 2);
-    eastWestPath.receiveShadow = true;
-    scene.add(eastWestPath);
-
-    // Perimeter Fence
-    const fenceMat = new THREE.MeshStandardMaterial({ color: 0x1E293B, roughness: 0.6 });
-    const fenceBars = [
-      { x: 0, z: -37.5, w: 76, d: 1 },
-      { x: 0, z: 37.5, w: 76, d: 1 },
-      { x: -37.5, z: 0, w: 1, d: 76 },
-      { x: 37.5, z: 0, w: 1, d: 76 }
-    ];
-    fenceBars.forEach(b => {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(b.w, 2.2, b.d), fenceMat);
-      m.position.set(b.x, 1.1, b.z);
-      m.castShadow = true;
-      m.receiveShadow = true;
-      scene.add(m);
-    });
-
-    // Helper: School Building Generator
-    function createBuilding(x, z, w, h, d, wallColor, roofColor, trimColor) {
-      const group = new THREE.Group();
-      group.position.set(x, 0, z);
-
-      const body = new THREE.Mesh(
-        new THREE.BoxGeometry(w, h, d),
-        new THREE.MeshStandardMaterial({ color: wallColor, roughness: 0.7 })
-      );
-      body.position.y = h / 2;
-      body.castShadow = true;
-      body.receiveShadow = true;
-      group.add(body);
-
-      const roof = new THREE.Mesh(
-        new THREE.BoxGeometry(w + 1.2, 0.9, d + 1.2),
-        new THREE.MeshStandardMaterial({ color: roofColor, roughness: 0.6 })
-      );
-      roof.position.y = h + 0.45;
-      roof.castShadow = true;
-      group.add(roof);
-
-      const trim = new THREE.Mesh(
-        new THREE.BoxGeometry(w + 0.2, 0.45, d + 0.2),
-        new THREE.MeshStandardMaterial({ color: trimColor, roughness: 0.5 })
-      );
-      trim.position.y = 0.25;
-      group.add(trim);
-
-      // Decorative Windows
-      const winMat = new THREE.MeshStandardMaterial({ color: 0x38BDF8, roughness: 0.2, metalness: 0.3 });
-      const winCount = Math.max(2, Math.floor(w / 4.5));
-      for (let i = 0; i < winCount; i++) {
-        const wx = -w / 2 + (w / (winCount + 1)) * (i + 1);
-        const winFront = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.5, 0.15), winMat);
-        winFront.position.set(wx, h * 0.58, d / 2 + 0.05);
-        group.add(winFront);
-
-        const winBack = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.5, 0.15), winMat);
-        winBack.position.set(wx, h * 0.58, -d / 2 - 0.05);
-        group.add(winBack);
+      // Subtle architectural stone & micro-paver variation
+      for (let i = 0; i < 3600; i++) {
+        const gx = Math.random() * 512;
+        const gy = Math.random() * 512;
+        ctx.fillStyle = Math.random() > 0.5 ? "rgba(255,255,255,0.20)" : "rgba(71,85,105,0.09)";
+        ctx.fillRect(gx, gy, 2, 2);
       }
 
-      scene.add(group);
-      addBoxCollider(x, z, w, d);
+      // Herringbone / modular tile seams with bevel highlight
+      for (let p = 0; p <= 512; p += 64) {
+        ctx.strokeStyle = "rgba(100, 116, 139, 0.34)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(p, 0);
+        ctx.lineTo(p, 512);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(0, p);
+        ctx.lineTo(512, p);
+        ctx.stroke();
+
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(p + 2, 0);
+        ctx.lineTo(p + 2, 512);
+        ctx.stroke();
+      }
+      tex.update();
+      tex.uScale = 24;
+      tex.vScale = 24;
+      return tex;
     }
 
-    // 4 Campus Buildings
-    createBuilding(0, -24, 24, 7.5, 10, 0xF8FAFC, 0x1E3A8A, 0x2563EB);    // Gedung Utama (Utara)
-    createBuilding(26, -3, 10, 6.0, 16, 0xF1F5F9, 0x0F766E, 0x14B8A6);    // Lab Bisnis Digital (Timur)
-    createBuilding(-26, 4, 10, 5.5, 14, 0xFEF3C7, 0xB45309, 0xF59E0B);    // Ruang PKK & Taman (Barat)
-    createBuilding(16, 24, 14, 5.0, 9, 0xEDE9FE, 0x5B21B6, 0x7C3AED);     // Kantin Digital (Tenggara)
+    function createRichGrassTexture() {
+      const tex = new BABYLON.DynamicTexture("richGrassTex", { width: 512, height: 512 }, scene, true);
+      const ctx = tex.getContext();
+      ctx.fillStyle = "#2E9E53";
+      ctx.fillRect(0, 0, 512, 512);
+
+      const greens = ["#228B46", "#38B862", "#4ADE80", "#1E7A3D", "#65D687"];
+      for (let i = 0; i < 6500; i++) {
+        const x = Math.random() * 512;
+        const y = Math.random() * 512;
+        ctx.fillStyle = greens[i % greens.length];
+        ctx.fillRect(x, y, 2, 5);
+      }
+      tex.update();
+      tex.uScale = 14;
+      tex.vScale = 14;
+      return tex;
+    }
+
+    const floorMat = new BABYLON.PBRMaterial("floorMat", scene);
+    floorMat.albedoTexture = createCampusFloorTexture();
+    floorMat.metallic = 0.02;
+    floorMat.roughness = 0.86;
+
+    const ground = BABYLON.MeshBuilder.CreateGround("ground", { width: 86, height: 86 }, scene);
+    ground.material = floorMat;
+    ground.receiveShadows = true;
+
+    // Area Tanah Hijau di Luar Lapangan Utama (Belakang & Samping Bangunan) + Ornamen Rumput Bergoyang
+    const grassFieldMat = new BABYLON.PBRMaterial("grassFieldMat", scene);
+    grassFieldMat.albedoTexture = createRichGrassTexture();
+    grassFieldMat.metallic = 0.0;
+    grassFieldMat.roughness = 0.88;
+
+    const outerLawnPatches = [
+      { name: "lawnNorth", x: 0, z: -28.5, w: 76, d: 19 },
+      { name: "lawnSouth", x: 0, z: 29.0, w: 76, d: 17 },
+      { name: "lawnWest", x: -29.0, z: 1.5, w: 18, d: 41 },
+      { name: "lawnEast", x: 29.0, z: 1.5, w: 18, d: 41 }
+    ];
+    outerLawnPatches.forEach((p) => {
+      const lawn = BABYLON.MeshBuilder.CreateBox(p.name, { width: p.w, height: 0.02, depth: p.d }, scene);
+      lawn.position = new BABYLON.Vector3(p.x, 0.012, p.z);
+      lawn.material = grassFieldMat;
+      lawn.receiveShadows = true;
+    });
+
+    // Ornamen Rumpun Rumput 3D Bergoyang Tertiup Angin + Bunga Taman Warna-Warni
+    const grassBlades = [];
+    const bladeMat = new BABYLON.StandardMaterial("grassBladeMat", scene);
+    bladeMat.diffuseColor = BABYLON.Color3.FromHexString("#15803D");
+    bladeMat.emissiveColor = new BABYLON.Color3(0.02, 0.08, 0.02);
+
+    const flowerColors = ["#F43F5E", "#FBBF24", "#A855F7", "#38BDF8", "#FB923C"];
+    const flowerMats = flowerColors.map((hex, idx) => {
+      const fm = new BABYLON.StandardMaterial(`flowerMat_${idx}`, scene);
+      fm.diffuseColor = BABYLON.Color3.FromHexString(hex);
+      fm.emissiveColor = BABYLON.Color3.FromHexString(hex).scale(0.25);
+      return fm;
+    });
+
+    const grassZones = [
+      { minX: -34, maxX: 34, minZ: -35, maxZ: -19 },
+      { minX: -34, maxX: 34, minZ: 20, maxZ: 35 },
+      { minX: -35, maxX: -20, minZ: -18, maxZ: 19 },
+      { minX: 20, maxX: 35, minZ: -18, maxZ: 19 }
+    ];
+
+    grassZones.forEach((zone, zIdx) => {
+      for (let i = 0; i < 52; i++) {
+        const gx = zone.minX + Math.random() * (zone.maxX - zone.minX);
+        const gz = zone.minZ + Math.random() * (zone.maxZ - zone.minZ);
+        if (Math.abs(gx) < 13 && gz < -18.5) continue;
+        if (gx > 20.5 && Math.abs(gz + 3) < 8.5) continue;
+        if (gx < -20.5 && Math.abs(gz - 4) < 7.5) continue;
+        if (Math.abs(gx - 16) < 7.5 && Math.abs(gz - 24) < 5) continue;
+        if (Math.abs(gx) < 4.5 && gz > 28) continue;
+
+        const tuft = new BABYLON.TransformNode(`tuft_${zIdx}_${i}`, scene);
+        tuft.position = new BABYLON.Vector3(gx, 0.05, gz);
+
+        for (let b = 0; b < 3; b++) {
+          const blade = BABYLON.MeshBuilder.CreateCylinder(`blade_${zIdx}_${i}_${b}`, {
+            diameterTop: 0.0,
+            diameterBottom: 0.09,
+            height: 0.36 + Math.random() * 0.2,
+            tessellation: 4
+          }, scene);
+          blade.position = new BABYLON.Vector3((b - 1) * 0.08, 0.18, (b % 2) * 0.06);
+          blade.rotation.z = (b - 1) * 0.18;
+          blade.material = bladeMat;
+          blade.parent = tuft;
+        }
+
+        if (i % 4 === 0) {
+          const blossom = BABYLON.MeshBuilder.CreateSphere(`flower_${zIdx}_${i}`, { diameter: 0.16, segments: 8 }, scene);
+          blossom.position = new BABYLON.Vector3(0, 0.42, 0.03);
+          blossom.material = flowerMats[(i + zIdx) % flowerMats.length];
+          blossom.parent = tuft;
+        }
+
+        grassBlades.push({
+          node: tuft,
+          phase: Math.random() * Math.PI * 2,
+          speed: 1.6 + Math.random() * 0.8
+        });
+      }
+    });
+
+    // Subtle Courtyard Border Trim & Tactical Court Lines (Separated Y heights to prevent Z-fighting)
+    const borderMat = new BABYLON.StandardMaterial("borderMat", scene);
+    borderMat.diffuseColor = BABYLON.Color3.FromHexString("#64748B");
+    const courtyardRim = BABYLON.MeshBuilder.CreateBox("courtyardRim", { width: 38.2, height: 0.025, depth: 36.2 }, scene);
+    courtyardRim.position = new BABYLON.Vector3(0, 0.028, 2);
+    courtyardRim.material = borderMat;
+    courtyardRim.receiveShadows = true;
+
+    const courtFloorMat = new BABYLON.PBRMaterial("courtFloorMat", scene);
+    courtFloorMat.albedoTexture = createCampusFloorTexture();
+    courtFloorMat.albedoColor = BABYLON.Color3.FromHexString("#EEF2F6");
+    courtFloorMat.metallic = 0.02;
+    courtFloorMat.roughness = 0.84;
+    const courtyard = BABYLON.MeshBuilder.CreateBox("courtyard", { width: 36.8, height: 0.03, depth: 34.8 }, scene);
+    courtyard.position = new BABYLON.Vector3(0, 0.048, 2);
+    courtyard.material = courtFloorMat;
+    courtyard.receiveShadows = true;
+
+    // Decorative Plaza Ring Around Flagpole
+    const plazaRingMat = new BABYLON.StandardMaterial("plazaRingMat", scene);
+    plazaRingMat.diffuseColor = BABYLON.Color3.FromHexString("#1E3A8A");
+    const plazaRing = BABYLON.MeshBuilder.CreateTorus("plazaRing", { diameter: 8.5, thickness: 0.16, tessellation: 48 }, scene);
+    plazaRing.position = new BABYLON.Vector3(0, 0.085, 2);
+    plazaRing.material = plazaRingMat;
+
+    // Walkways (Distinct Y = 0.068 above courtyard & lawns to eliminate Z-fighting)
+    const pathMat = new BABYLON.PBRMaterial("pathMat", scene);
+    pathMat.albedoColor = BABYLON.Color3.FromHexString("#CBD5E1");
+    pathMat.metallic = 0.02;
+    pathMat.roughness = 0.82;
+
+    const northPath = BABYLON.MeshBuilder.CreateBox("northPath", { width: 8, height: 0.025, depth: 8 }, scene);
+    northPath.position = new BABYLON.Vector3(0, 0.068, -17.5);
+    northPath.material = pathMat;
+    northPath.receiveShadows = true;
+
+    const southGatePath = BABYLON.MeshBuilder.CreateBox("southGatePath", { width: 7, height: 0.025, depth: 17.5 }, scene);
+    southGatePath.position = new BABYLON.Vector3(0, 0.068, 28.5);
+    southGatePath.material = pathMat;
+    southGatePath.receiveShadows = true;
+
+    const eastPath = BABYLON.MeshBuilder.CreateBox("eastPath", { width: 4.5, height: 0.025, depth: 6 }, scene);
+    eastPath.position = new BABYLON.Vector3(20.8, 0.068, 2);
+    eastPath.material = pathMat;
+    eastPath.receiveShadows = true;
+
+    const westPath = BABYLON.MeshBuilder.CreateBox("westPath", { width: 4.5, height: 0.025, depth: 6 }, scene);
+    westPath.position = new BABYLON.Vector3(-20.8, 0.068, 2);
+    westPath.material = pathMat;
+    westPath.receiveShadows = true;
+
+    // Architectural Perimeter Fence with Pillars & South Entrance Archway
+    const fenceMat = new BABYLON.PBRMaterial("fenceMat", scene);
+    fenceMat.albedoColor = BABYLON.Color3.FromHexString("#1E293B");
+    fenceMat.metallic = 0.35;
+    fenceMat.roughness = 0.6;
+    [
+      { name: "fN", x: 0, z: -37.5, w: 76, d: 1 },
+      { name: "fSL", x: -21.5, z: 37.5, w: 33, d: 1 },
+      { name: "fSR", x: 21.5, z: 37.5, w: 33, d: 1 },
+      { name: "fW", x: -37.5, z: 0, w: 1, d: 76 },
+      { name: "fE", x: 37.5, z: 0, w: 1, d: 76 }
+    ].forEach((b) => {
+      const m = BABYLON.MeshBuilder.CreateBox(b.name, { width: b.w, height: 2.3, depth: b.d }, scene);
+      m.position = new BABYLON.Vector3(b.x, 1.15, b.z);
+      m.material = fenceMat;
+      m.receiveShadows = true;
+      shadowGenerator.addShadowCaster(m);
+    });
+
+    // Grand School Gate Pillars & Arch at South Entrance
+    const gatePillarMat = new BABYLON.PBRMaterial("gatePillarMat", scene);
+    gatePillarMat.albedoColor = BABYLON.Color3.FromHexString("#F8FAFC");
+    gatePillarMat.roughness = 0.7;
+    [-4.6, 4.6].forEach((gx, i) => {
+      const gp = BABYLON.MeshBuilder.CreateBox(`gatePillar_${i}`, { width: 1.5, height: 5.4, depth: 1.5 }, scene);
+      gp.position = new BABYLON.Vector3(gx, 2.7, 37.3);
+      gp.material = gatePillarMat;
+      shadowGenerator.addShadowCaster(gp);
+    });
+    const gateArchMat = new BABYLON.PBRMaterial("gateArchMat", scene);
+    gateArchMat.albedoColor = BABYLON.Color3.FromHexString("#1E3A8A");
+    gateArchMat.metallic = 0.2;
+    gateArchMat.roughness = 0.5;
+    const gateArch = BABYLON.MeshBuilder.CreateBox("gateArch", { width: 11.2, height: 1.1, depth: 1.7 }, scene);
+    gateArch.position = new BABYLON.Vector3(0, 5.5, 37.3);
+    gateArch.material = gateArchMat;
+    shadowGenerator.addShadowCaster(gateArch);
+
+    // Helper: Detailed Architectural School Building Generator (With Colonnade Pillars, Terraces & Reflective Glass)
+    function createBuilding(name, x, z, w, h, d, wallHex, roofHex, trimHex) {
+      const parent = new BABYLON.TransformNode(name + "_grp", scene);
+      parent.position = new BABYLON.Vector3(x, 0, z);
+
+      const wallMat = new BABYLON.PBRMaterial(name + "_wall", scene);
+      wallMat.albedoColor = BABYLON.Color3.FromHexString(wallHex);
+      wallMat.metallic = 0.0;
+      wallMat.roughness = 0.82;
+
+      const roofMat = new BABYLON.PBRMaterial(name + "_roof", scene);
+      roofMat.albedoColor = BABYLON.Color3.FromHexString(roofHex);
+      roofMat.metallic = 0.08;
+      roofMat.roughness = 0.68;
+
+      const trimMat = new BABYLON.PBRMaterial(name + "_trim", scene);
+      trimMat.albedoColor = BABYLON.Color3.FromHexString(trimHex);
+      trimMat.metallic = 0.1;
+      trimMat.roughness = 0.65;
+
+      // Raised Porch / Plinth
+      const plinth = BABYLON.MeshBuilder.CreateBox(name + "_plinth", { width: w + 1.4, height: 0.35, depth: d + 1.4 }, scene);
+      plinth.position.y = 0.175;
+      plinth.material = trimMat;
+      plinth.parent = parent;
+      plinth.receiveShadows = true;
+
+      const body = BABYLON.MeshBuilder.CreateBox(name + "_body", { width: w, height: h, depth: d }, scene);
+      body.position.y = h / 2 + 0.2;
+      body.material = wallMat;
+      body.parent = parent;
+      body.receiveShadows = true;
+      shadowGenerator.addShadowCaster(body);
+
+      // Horizontal Architectural Cornice Band
+      const midBand = BABYLON.MeshBuilder.CreateBox(name + "_midBand", { width: w + 0.3, height: 0.32, depth: d + 0.3 }, scene);
+      midBand.position.y = h * 0.52;
+      midBand.material = trimMat;
+      midBand.parent = parent;
+
+      // Multi-tiered Pitched / Overhanging Roof
+      const roof = BABYLON.MeshBuilder.CreateBox(name + "_roof", { width: w + 1.6, height: 0.85, depth: d + 1.6 }, scene);
+      roof.position.y = h + 0.55;
+      roof.material = roofMat;
+      roof.parent = parent;
+      shadowGenerator.addShadowCaster(roof);
+
+      const upperRoof = BABYLON.MeshBuilder.CreateBox(name + "_upperRoof", { width: w * 0.78, height: 0.75, depth: d * 0.78 }, scene);
+      upperRoof.position.y = h + 1.25;
+      upperRoof.material = roofMat;
+      upperRoof.parent = parent;
+      shadowGenerator.addShadowCaster(upperRoof);
+
+      // Front Architectural Columns (Widened center span on GedungUtama so signboard is completely unobstructed)
+      const colCount = Math.max(3, Math.floor(w / 5));
+      for (let c = 0; c < colCount; c++) {
+        let cx = -w / 2 + 0.8 + ((w - 1.6) / (colCount - 1)) * c;
+        if (name === "GedungUtama" && Math.abs(cx) < 6.4) {
+          cx = cx < 0 ? -6.6 : 6.6;
+        }
+        const col = BABYLON.MeshBuilder.CreateCylinder(`${name}_col_${c}`, { diameter: 0.38, height: h, tessellation: 14 }, scene);
+        col.position = new BABYLON.Vector3(cx, h / 2 + 0.2, d / 2 + 0.35);
+        col.material = wallMat;
+        col.parent = parent;
+        shadowGenerator.addShadowCaster(col);
+      }
+
+      // Reflective Glazed Windows with Frames
+      const winMat = new BABYLON.PBRMaterial(name + "_win", scene);
+      winMat.albedoColor = BABYLON.Color3.FromHexString("#38BDF8");
+      winMat.emissiveColor = BABYLON.Color3.FromHexString("#0284C7").scale(0.28);
+      winMat.metallic = 0.65;
+      winMat.roughness = 0.14;
+
+      const winCount = Math.max(2, Math.floor(w / 4.2));
+      for (let i = 0; i < winCount; i++) {
+        const wx = -w / 2 + (w / (winCount + 1)) * (i + 1);
+        const wF = BABYLON.MeshBuilder.CreateBox(`${name}_wf_${i}`, { width: 1.75, height: 1.65, depth: 0.16 }, scene);
+        wF.position = new BABYLON.Vector3(wx, h * 0.62, d / 2 + 0.06);
+        wF.material = winMat;
+        wF.parent = parent;
+
+        const wB = BABYLON.MeshBuilder.CreateBox(`${name}_wb_${i}`, { width: 1.75, height: 1.65, depth: 0.16 }, scene);
+        wB.position = new BABYLON.Vector3(wx, h * 0.62, -d / 2 - 0.06);
+        wB.material = winMat;
+        wB.parent = parent;
+      }
+
+      // Entrance Double Door on Front Facade
+      const doorMat = new BABYLON.PBRMaterial(name + "_door", scene);
+      doorMat.albedoColor = BABYLON.Color3.FromHexString("#1E293B");
+      doorMat.metallic = 0.3;
+      doorMat.roughness = 0.4;
+      const door = BABYLON.MeshBuilder.CreateBox(name + "_door", { width: 2.3, height: 2.3, depth: 0.2 }, scene);
+      door.position = new BABYLON.Vector3(0, 1.35, d / 2 + 0.06);
+      door.material = doorMat;
+      door.parent = parent;
+
+      addBoxCollider(x, z, w, d);
+      return parent;
+    }
+
+    // 4 School Buildings
+    createBuilding("GedungUtama", 0, -23, 24, 7.2, 8.5, "#F8FAFC", "#1E3A8A", "#94A3B8");
+    createBuilding("LabBisnisDigital", 24, -3, 7.5, 5.2, 15, "#F1F5F9", "#0284C7", "#CBD5E1");
+    createBuilding("KantinDigital", 16, 24, 13, 4.6, 7.5, "#FFFBEB", "#D97706", "#FDE68A");
+    createBuilding("MasjidSekolah", -24, 4, 7.5, 5.6, 13, "#F8FAFC", "#059669", "#A7F3D0");
+
+    // Papan Nama Gedung Utama: SMK NEGERI 1 CILEGON + Logo SMK N 1 Cilegon (Tepat di belakang Ibu Ria)
+    (function createSchoolSignboard() {
+      const signTex = new BABYLON.DynamicTexture("schoolSignTex", { width: 1152, height: 216 }, scene, true);
+      const sCtx = signTex.getContext();
+
+      // Background & Border
+      sCtx.fillStyle = "#0F172A";
+      sCtx.fillRect(0, 0, 1152, 216);
+      sCtx.strokeStyle = "#F59E0B";
+      sCtx.lineWidth = 10;
+      sCtx.strokeRect(8, 8, 1136, 200);
+
+      // Draw Detailed Emblem Logo SMK N 1 CILEGON (Pentagon Yellow Shield, Star, Flame, Pen, Open Book & Blue Ribbon)
+      sCtx.save();
+      sCtx.translate(115, 108);
+
+      // Golden Pentagon Shield
+      sCtx.beginPath();
+      sCtx.moveTo(0, -76);
+      sCtx.lineTo(74, -22);
+      sCtx.lineTo(46, 70);
+      sCtx.lineTo(-46, 70);
+      sCtx.lineTo(-74, -22);
+      sCtx.closePath();
+      const shieldGrad = sCtx.createLinearGradient(-60, -76, 60, 70);
+      shieldGrad.addColorStop(0, "#FDE047");
+      shieldGrad.addColorStop(0.5, "#EAB308");
+      shieldGrad.addColorStop(1, "#CA8A04");
+      sCtx.fillStyle = shieldGrad;
+      sCtx.fill();
+      sCtx.lineWidth = 4;
+      sCtx.strokeStyle = "#FEF08A";
+      sCtx.stroke();
+
+      // Top Gold Star
+      sCtx.fillStyle = "#FFFBEB";
+      sCtx.beginPath();
+      for (let i = 0; i < 5; i++) {
+        const outerA = (i * 72 - 90) * Math.PI / 180;
+        const innerA = (i * 72 - 54) * Math.PI / 180;
+        if (i === 0) sCtx.moveTo(Math.cos(outerA) * 11, -54 + Math.sin(outerA) * 11);
+        else sCtx.lineTo(Math.cos(outerA) * 11, -54 + Math.sin(outerA) * 11);
+        sCtx.lineTo(Math.cos(innerA) * 4.5, -54 + Math.sin(innerA) * 4.5);
+      }
+      sCtx.closePath();
+      sCtx.fill();
+
+      // Silver Wreath Arcs (Left & Right)
+      sCtx.strokeStyle = "#F8FAFC";
+      sCtx.lineWidth = 5;
+      sCtx.beginPath();
+      sCtx.arc(4, -2, 46, 0.68 * Math.PI, 1.32 * Math.PI);
+      sCtx.stroke();
+      sCtx.beginPath();
+      sCtx.arc(-4, -2, 46, -0.32 * Math.PI, 0.32 * Math.PI);
+      sCtx.stroke();
+
+      // Flame Glow & Monument
+      sCtx.fillStyle = "#EA580C";
+      sCtx.beginPath();
+      sCtx.moveTo(-22, 16);
+      sCtx.quadraticCurveTo(-26, -14, 0, -28);
+      sCtx.quadraticCurveTo(26, -14, 22, 16);
+      sCtx.closePath();
+      sCtx.fill();
+
+      // Vertical Pen Nib
+      sCtx.fillStyle = "#E2E8F0";
+      sCtx.fillRect(-3.5, -36, 7, 50);
+
+      // Open Book (White Pages + Royal Blue Cover)
+      sCtx.fillStyle = "#1D4ED8";
+      sCtx.beginPath();
+      sCtx.moveTo(-36, 18);
+      sCtx.quadraticCurveTo(-18, 12, 0, 22);
+      sCtx.quadraticCurveTo(18, 12, 36, 18);
+      sCtx.lineTo(36, 25);
+      sCtx.quadraticCurveTo(18, 19, 0, 29);
+      sCtx.quadraticCurveTo(-18, 19, -36, 25);
+      sCtx.closePath();
+      sCtx.fill();
+
+      sCtx.fillStyle = "#FFFFFF";
+      sCtx.beginPath();
+      sCtx.moveTo(-34, 15);
+      sCtx.quadraticCurveTo(-17, 9, 0, 19);
+      sCtx.quadraticCurveTo(17, 9, 34, 15);
+      sCtx.lineTo(34, 20);
+      sCtx.quadraticCurveTo(17, 14, 0, 24);
+      sCtx.quadraticCurveTo(-17, 14, -34, 20);
+      sCtx.closePath();
+      sCtx.fill();
+
+      // Red Wave Line
+      sCtx.strokeStyle = "#DC2626";
+      sCtx.lineWidth = 2.5;
+      sCtx.beginPath();
+      sCtx.moveTo(-20, 38);
+      sCtx.bezierCurveTo(-12, 30, -6, 46, 0, 38);
+      sCtx.bezierCurveTo(6, 30, 12, 46, 20, 38);
+      sCtx.stroke();
+
+      // Bottom Blue Ribbon Banner ("SMK N 1 CILEGON")
+      sCtx.fillStyle = "#0284C7";
+      sCtx.beginPath();
+      sCtx.roundRect(-52, 46, 104, 17, 5);
+      sCtx.fill();
+      sCtx.strokeStyle = "#E0F2FE";
+      sCtx.lineWidth = 1.5;
+      sCtx.stroke();
+
+      sCtx.fillStyle = "#FFFFFF";
+      sCtx.font = "800 9.5px Inter, Arial, sans-serif";
+      sCtx.textAlign = "center";
+      sCtx.textBaseline = "middle";
+      sCtx.fillText("SMK N 1 CILEGON", 0, 55);
+      sCtx.restore();
+
+      // Main School Title & Updated Subtitle ("SMK PUSAT KEUNGGULAN")
+      sCtx.fillStyle = "#FFFFFF";
+      sCtx.font = "800 60px Inter, Arial, sans-serif";
+      sCtx.textAlign = "center";
+      sCtx.textBaseline = "middle";
+      sCtx.fillText("SMK NEGERI 1 CILEGON", 648, 86);
+
+      sCtx.fillStyle = "#FBBF24";
+      sCtx.font = "800 30px Inter, Arial, sans-serif";
+      sCtx.fillText("SMK PUSAT KEUNGGULAN", 648, 148);
+      signTex.update();
+
+      const signMat = new BABYLON.StandardMaterial("schoolSignMat", scene);
+      signMat.diffuseTexture = signTex;
+      signMat.emissiveColor = new BABYLON.Color3(0.35, 0.35, 0.35);
+
+      const signBackingMat = new BABYLON.StandardMaterial("signBackingMat", scene);
+      signBackingMat.diffuseColor = BABYLON.Color3.FromHexString("#1E3A8A");
+
+      const signFrame = BABYLON.MeshBuilder.CreateBox("schoolSignFrame", { width: 12.2, height: 2.3, depth: 0.28 }, scene);
+      signFrame.position = new BABYLON.Vector3(0, 6.2, -18.62);
+      signFrame.material = signBackingMat;
+
+      const signFace = BABYLON.MeshBuilder.CreatePlane("schoolSignFace", { width: 11.9, height: 2.1 }, scene);
+      signFace.position = new BABYLON.Vector3(0, 6.2, -18.47);
+      signFace.rotation.y = Math.PI;
+      signFace.material = signMat;
+    })();
 
     // Flagpole in Courtyard Center
-    const poleGroup = new THREE.Group();
-    poleGroup.position.set(0, 0, 2);
-    const poleBase = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.4, 0.4, 16), new THREE.MeshStandardMaterial({ color: 0x64748B }));
+    const poleGroup = new BABYLON.TransformNode("flagpole", scene);
+    poleGroup.position = new BABYLON.Vector3(0, 0, 2);
+
+    const poleBaseMat = new BABYLON.StandardMaterial("poleBaseMat", scene);
+    poleBaseMat.diffuseColor = BABYLON.Color3.FromHexString("#64748B");
+    const poleBase = BABYLON.MeshBuilder.CreateCylinder("poleBase", { diameterTop: 2.4, diameterBottom: 2.8, height: 0.4, tessellation: 20 }, scene);
     poleBase.position.y = 0.2;
-    poleGroup.add(poleBase);
+    poleBase.material = poleBaseMat;
+    poleBase.parent = poleGroup;
 
-    const poleRod = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 9.5, 12), new THREE.MeshStandardMaterial({ color: 0xE2E8F0, metalness: 0.6 }));
+    const poleRodMat = new BABYLON.PBRMaterial("poleRodMat", scene);
+    poleRodMat.albedoColor = BABYLON.Color3.FromHexString("#E2E8F0");
+    poleRodMat.metallic = 0.7;
+    poleRodMat.roughness = 0.3;
+    const poleRod = BABYLON.MeshBuilder.CreateCylinder("poleRod", { diameterTop: 0.16, diameterBottom: 0.2, height: 9.5, tessellation: 14 }, scene);
     poleRod.position.y = 4.75;
-    poleRod.castShadow = true;
-    poleGroup.add(poleRod);
+    poleRod.material = poleRodMat;
+    poleRod.parent = poleGroup;
+    shadowGenerator.addShadowCaster(poleRod);
 
-    const flagRed = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.6, 0.05), new THREE.MeshStandardMaterial({ color: 0xDC2626 }));
-    flagRed.position.set(1.05, 8.9, 0);
-    poleGroup.add(flagRed);
+    const redMat = new BABYLON.StandardMaterial("redFlagMat", scene);
+    redMat.diffuseColor = BABYLON.Color3.FromHexString("#DC2626");
+    const flagRed = BABYLON.MeshBuilder.CreateBox("flagRed", { width: 2.0, height: 0.6, depth: 0.06 }, scene);
+    flagRed.position = new BABYLON.Vector3(1.05, 8.9, 0);
+    flagRed.material = redMat;
+    flagRed.parent = poleGroup;
 
-    const flagWhite = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.6, 0.05), new THREE.MeshStandardMaterial({ color: 0xFFFFFF }));
-    flagWhite.position.set(1.05, 8.3, 0);
-    poleGroup.add(flagWhite);
+    const whiteFlagMat = new BABYLON.StandardMaterial("whiteFlagMat", scene);
+    whiteFlagMat.diffuseColor = BABYLON.Color3.FromHexString("#F5F5F5");
+    const flagWhite = BABYLON.MeshBuilder.CreateBox("flagWhite", { width: 2.0, height: 0.6, depth: 0.06 }, scene);
+    flagWhite.position = new BABYLON.Vector3(1.05, 8.3, 0);
+    flagWhite.material = whiteFlagMat;
+    flagWhite.parent = poleGroup;
 
-    scene.add(poleGroup);
     addBoxCollider(0, 2, 2.2, 2.2);
 
-    // Decorative Low-Poly Trees
-    function createTree(x, z) {
-      const tree = new THREE.Group();
-      tree.position.set(x, 0, z);
-      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.38, 1.8, 8), new THREE.MeshStandardMaterial({ color: 0x78350F }));
-      trunk.position.y = 0.9;
-      trunk.castShadow = true;
-      tree.add(trunk);
+    // Decorative Triangular Pine Trees (Pohon Segitiga Bertingkat)
+    const trunkMat = new BABYLON.StandardMaterial("trunkMat", scene);
+    trunkMat.diffuseColor = BABYLON.Color3.FromHexString("#78350F");
+    const leafMat = new BABYLON.StandardMaterial("leafMat", scene);
+    leafMat.diffuseColor = BABYLON.Color3.FromHexString("#15803D");
+    const leafTopMat = new BABYLON.StandardMaterial("leafTopMat", scene);
+    leafTopMat.diffuseColor = BABYLON.Color3.FromHexString("#22C55E");
 
-      const foliage = new THREE.Mesh(new THREE.DodecahedronGeometry(1.5, 1), new THREE.MeshStandardMaterial({ color: 0x16A34A, roughness: 0.8 }));
-      foliage.position.y = 2.7;
-      foliage.castShadow = true;
-      tree.add(foliage);
-
-      scene.add(tree);
-      addBoxCollider(x, z, 1.1, 1.1);
-    }
-
-    const treeCoords = [
+    [
       [-14, -14], [14, -14], [-15, 14], [-22, -12], [22, 12], [-10, 24], [5, 25]
-    ];
-    treeCoords.forEach(([tx, tz]) => createTree(tx, tz));
+    ].forEach(([tx, tz], idx) => {
+      const tNode = new BABYLON.TransformNode(`tree_${idx}`, scene);
+      tNode.position = new BABYLON.Vector3(tx, 0, tz);
+
+      const trunk = BABYLON.MeshBuilder.CreateCylinder(`trunk_${idx}`, { diameterTop: 0.42, diameterBottom: 0.62, height: 1.7, tessellation: 10 }, scene);
+      trunk.position.y = 0.85;
+      trunk.material = trunkMat;
+      trunk.parent = tNode;
+      shadowGenerator.addShadowCaster(trunk);
+
+      const coneBottom = BABYLON.MeshBuilder.CreateCylinder(`coneBot_${idx}`, {
+        diameterTop: 0.25,
+        diameterBottom: 2.9,
+        height: 2.3,
+        tessellation: 6
+      }, scene);
+      coneBottom.position.y = 2.45;
+      coneBottom.material = leafMat;
+      coneBottom.parent = tNode;
+      shadowGenerator.addShadowCaster(coneBottom);
+
+      const coneMid = BABYLON.MeshBuilder.CreateCylinder(`coneMid_${idx}`, {
+        diameterTop: 0.15,
+        diameterBottom: 2.2,
+        height: 1.95,
+        tessellation: 6
+      }, scene);
+      coneMid.position.y = 3.65;
+      coneMid.material = leafTopMat;
+      coneMid.parent = tNode;
+      shadowGenerator.addShadowCaster(coneMid);
+
+      const coneTop = BABYLON.MeshBuilder.CreateCylinder(`coneTop_${idx}`, {
+        diameterTop: 0.0,
+        diameterBottom: 1.45,
+        height: 1.5,
+        tessellation: 6
+      }, scene);
+      coneTop.position.y = 4.75;
+      coneTop.material = leafMat;
+      coneTop.parent = tNode;
+      shadowGenerator.addShadowCaster(coneTop);
+
+      addBoxCollider(tx, tz, 1.1, 1.1);
+    });
 
     /**
-     * 5. HUMANOID AVATAR BUILDER (PLAYER & NPC TEACHERS)
+     * 5. SEMI-REALISTIC ANATOMICAL 3D CHARACTER BUILDER (BABYLON.JS)
      */
-    function createHumanoidCharacter({ shirtColor, pantsColor, skinColor, hairColor }) {
-      const root = new THREE.Group();
-      root.position.y = 0.12;
+    function createFaceExpressionTexture(idPrefix, isFemale) {
+      const tex = new BABYLON.DynamicTexture(`${idPrefix}_faceTex`, { width: 256, height: 256 }, scene, true);
+      const ctx = tex.getContext();
 
-      const skinMat = new THREE.MeshStandardMaterial({ color: skinColor || 0xFDBA74, roughness: 0.6 });
-      const shirtMat = new THREE.MeshStandardMaterial({ color: shirtColor, roughness: 0.6 });
-      const pantsMat = new THREE.MeshStandardMaterial({ color: pantsColor || 0x1E293B, roughness: 0.7 });
-      const hairMat = new THREE.MeshStandardMaterial({ color: hairColor || 0x0F172A, roughness: 0.8 });
+      // Warna dasar kulit seragam
+      ctx.fillStyle = "#F7C59F";
+      ctx.fillRect(0, 0, 256, 256);
 
-      // Torso
-      const torso = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.95, 0.42), shirtMat);
-      torso.position.y = 1.25;
-      torso.castShadow = true;
-      root.add(torso);
+      // Balik sumbu Y canvas agar sesuai dengan pemetaan UV sphere Babylon.js (atas = y kecil)
+      ctx.save();
+      ctx.translate(0, 256);
+      ctx.scale(1, -1);
 
-      // Head Group
-      const headGroup = new THREE.Group();
-      headGroup.position.y = 1.98;
-      const head = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.54, 0.54), skinMat);
-      head.castShadow = true;
-      headGroup.add(head);
+      // Alis ditempatkan DI ATAS mata
+      ctx.strokeStyle = "#1E293B";
+      ctx.lineWidth = isFemale ? 3.8 : 4.6;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(82, 102);
+      ctx.quadraticCurveTo(96, 95, 110, 101);
+      ctx.stroke();
 
-      const hair = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.22, 0.58), hairMat);
-      hair.position.y = 0.22;
-      headGroup.add(hair);
+      ctx.beginPath();
+      ctx.moveTo(146, 101);
+      ctx.quadraticCurveTo(160, 95, 174, 102);
+      ctx.stroke();
 
-      // Eyes
-      const eyeMat = new THREE.MeshBasicMaterial({ color: 0x0F172A });
-      const leftEye = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.05), eyeMat);
-      leftEye.position.set(-0.13, 0.03, 0.27);
-      headGroup.add(leftEye);
+      // Mata proporsional
+      [96, 160].forEach((ex) => {
+        ctx.fillStyle = "#FFFFFF";
+        ctx.beginPath();
+        ctx.ellipse(ex, 122, 9.5, 7.5, 0, 0, Math.PI * 2);
+        ctx.fill();
 
-      const rightEye = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.05), eyeMat);
-      rightEye.position.set(0.13, 0.03, 0.27);
-      headGroup.add(rightEye);
+        ctx.fillStyle = "#1E293B";
+        ctx.beginPath();
+        ctx.arc(ex, 122, 5.5, 0, Math.PI * 2);
+        ctx.fill();
 
-      root.add(headGroup);
+        ctx.fillStyle = "#090D16";
+        ctx.beginPath();
+        ctx.arc(ex, 122, 2.6, 0, Math.PI * 2);
+        ctx.fill();
 
-      // Limbs with Pivots
-      const leftArmPivot = new THREE.Group();
-      leftArmPivot.position.set(-0.52, 1.65, 0);
-      const leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.82, 0.24), shirtMat);
-      leftArm.position.y = -0.35;
-      leftArm.castShadow = true;
-      leftArmPivot.add(leftArm);
-      root.add(leftArmPivot);
+        ctx.fillStyle = "#FFFFFF";
+        ctx.beginPath();
+        ctx.arc(ex - 1.8, 119.5, 1.7, 0, Math.PI * 2);
+        ctx.fill();
+      });
 
-      const rightArmPivot = new THREE.Group();
-      rightArmPivot.position.set(0.52, 1.65, 0);
-      const rightArm = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.82, 0.24), shirtMat);
-      rightArm.position.y = -0.35;
-      rightArm.castShadow = true;
-      rightArmPivot.add(rightArm);
-      root.add(rightArmPivot);
+      // Rona pipi ditempatkan DI BAWAH sudut mata
+      ctx.fillStyle = "rgba(244, 114, 182, 0.25)";
+      ctx.beginPath();
+      ctx.ellipse(84, 144, 12, 7.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(172, 144, 12, 7.5, 0, 0, Math.PI * 2);
+      ctx.fill();
 
-      const leftLegPivot = new THREE.Group();
-      leftLegPivot.position.set(-0.2, 0.78, 0);
-      const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.78, 0.28), pantsMat);
-      leftLeg.position.y = -0.39;
-      leftLeg.castShadow = true;
-      leftLegPivot.add(leftLeg);
-      root.add(leftLegPivot);
+      // Senyum ramah di bawah hidung
+      ctx.strokeStyle = "#9A3412";
+      ctx.lineWidth = 4.0;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.arc(128, 158, 15, 0.18 * Math.PI, 0.82 * Math.PI);
+      ctx.stroke();
 
-      const rightLegPivot = new THREE.Group();
-      rightLegPivot.position.set(0.2, 0.78, 0);
-      const rightLeg = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.78, 0.28), pantsMat);
-      rightLeg.position.y = -0.39;
-      rightLeg.castShadow = true;
-      rightLegPivot.add(rightLeg);
-      root.add(rightLegPivot);
-
-      return { root, headGroup, leftArmPivot, rightArmPivot, leftLegPivot, rightLegPivot };
+      ctx.restore();
+      tex.update();
+      return tex;
     }
 
-    // Spawn Player Student Avatar (White Shirt + Grey SMK Trousers)
-    const player = createHumanoidCharacter({
-      shirtColor: 0xFFFFFF,
-      pantsColor: 0x475569,
-      skinColor: 0xFDBA74,
-      hairColor: 0x0F172A
-    });
-    player.root.position.set(0, 0.12, 12);
-    player.root.rotation.y = Math.PI;
-    scene.add(player.root);
+    function createAnatomicalCharacter(idPrefix, options) {
+      const {
+        gender = "male",
+        isTeacher = false,
+        shirtHex = "#F5F5F5",
+        bottomHex = "#555B65",
+        shoeHex = "#202124",
+        hijabHex = "#F5F5F5",
+        hairHex = "#1E293B"
+      } = options;
 
-    // Spawn 4 NPC Teachers + Floating Beacons + Screen Labels
-    const npcLabelsLayer = document.getElementById('npc-labels-layer');
-    const npcEntities = [];
+      const isFemale = gender === "female";
+      const isHijab = isFemale;
 
-    NPC_DATA.forEach((npc) => {
-      const charObj = createHumanoidCharacter({
-        shirtColor: npc.shirtColor,
-        pantsColor: 0x1E293B,
-        skinColor: 0xFDBA74,
-        hairColor: npc.hairColor
-      });
-      charObj.root.position.set(npc.position.x, 0.12, npc.position.z);
-      charObj.root.rotation.y = npc.rotationY;
-      scene.add(charObj.root);
+      const root = new BABYLON.TransformNode(`${idPrefix}_root`, scene);
+      root.position.y = 0.04;
 
-      // Ground Ring Indicator
-      const ringGeo = new THREE.RingGeometry(1.1, 1.35, 32);
-      const ringMat = new THREE.MeshBasicMaterial({ color: 0xFBBF24, side: THREE.DoubleSide });
-      const ring = new THREE.Mesh(ringGeo, ringMat);
-      ring.rotation.x = -Math.PI / 2;
-      ring.position.set(npc.position.x, 0.14, npc.position.z);
-      scene.add(ring);
+      const skinMat = new BABYLON.PBRMaterial(`${idPrefix}_skinMat`, scene);
+      skinMat.albedoColor = BABYLON.Color3.FromHexString("#F7C59F");
+      skinMat.metallic = 0.0;
+      skinMat.roughness = 0.72;
 
-      // Floating Diamond Beacon Above Head
-      const beaconGeo = new THREE.OctahedronGeometry(0.32, 0);
-      const beaconMat = new THREE.MeshStandardMaterial({
-        color: 0xFBBF24,
-        emissive: 0xD97706,
-        emissiveIntensity: 0.45
-      });
-      const beacon = new THREE.Mesh(beaconGeo, beaconMat);
-      beacon.position.set(npc.position.x, 2.85, npc.position.z);
-      scene.add(beacon);
+      const faceMat = new BABYLON.PBRMaterial(`${idPrefix}_faceMat`, scene);
+      faceMat.albedoTexture = createFaceExpressionTexture(idPrefix, isFemale);
+      faceMat.metallic = 0.0;
+      faceMat.roughness = 0.7;
 
-      // Floating HTML Nameplate
-      const labelEl = document.createElement('div');
-      labelEl.className = "absolute top-0 left-0 transition-opacity duration-150";
-      labelEl.innerHTML = `
-        <div class="bg-slate-900/90 backdrop-blur-sm text-white px-3 py-1.5 rounded-xl border border-white/20 shadow-lg text-center whitespace-nowrap">
-          <div class="text-xs font-extrabold leading-tight">${npc.name}</div>
-          <div class="text-[10px] font-semibold text-amber-300 leading-tight">${npc.role}</div>
-          <span class="npc-status-pill inline-block mt-1 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/40">
-            Belum Selesai
-          </span>
-        </div>
-      `;
-      npcLabelsLayer.appendChild(labelEl);
+      const shirtMat = new BABYLON.PBRMaterial(`${idPrefix}_shirtMat`, scene);
+      shirtMat.albedoColor = BABYLON.Color3.FromHexString(shirtHex);
+      shirtMat.metallic = 0.0;
+      shirtMat.roughness = 0.86;
 
-      npcEntities.push({ data: npc, charObj, ring, beacon, labelEl });
-    });
+      const bottomMat = new BABYLON.PBRMaterial(`${idPrefix}_bottomMat`, scene);
+      bottomMat.albedoColor = BABYLON.Color3.FromHexString(bottomHex);
+      bottomMat.metallic = 0.0;
+      bottomMat.roughness = 0.88;
+
+      const shoeMat = new BABYLON.PBRMaterial(`${idPrefix}_shoeMat`, scene);
+      shoeMat.albedoColor = BABYLON.Color3.FromHexString(shoeHex);
+      shoeMat.metallic = 0.05;
+      shoeMat.roughness = 0.65;
+
+      const hijabMat = new BABYLON.PBRMaterial(`${idPrefix}_hijabMat`, scene);
+      hijabMat.albedoColor = BABYLON.Color3.FromHexString(hijabHex);
+      hijabMat.metallic = 0.0;
+      hijabMat.roughness = 0.86;
+
+      const hairMat = new BABYLON.PBRMaterial(`${idPrefix}_hairMat`, scene);
+      hairMat.albedoColor = BABYLON.Color3.FromHexString(hairHex);
+      hairMat.metallic = 0.0;
+      hairMat.roughness = 0.8;
+
+      // 1. Torso & Smooth Shoulder Yoke
+      const torsoUpper = BABYLON.MeshBuilder.CreateCylinder(`${idPrefix}_torsoUp`, {
+        diameterTop: isFemale ? 0.64 : 0.72,
+        diameterBottom: isFemale ? 0.52 : 0.60,
+        height: 0.56,
+        tessellation: 18
+      }, scene);
+      torsoUpper.position.y = 1.36;
+      torsoUpper.scaling = new BABYLON.Vector3(1.0, 1.0, 0.64);
+      torsoUpper.material = shirtMat;
+      torsoUpper.parent = root;
+      shadowGenerator.addShadowCaster(torsoUpper);
+
+      const torsoLower = BABYLON.MeshBuilder.CreateCylinder(`${idPrefix}_torsoLow`, {
+        diameterTop: isFemale ? 0.52 : 0.60,
+        diameterBottom: isFemale ? 0.58 : 0.62,
+        height: 0.34,
+        tessellation: 18
+      }, scene);
+      torsoLower.position.y = 0.94;
+      torsoLower.scaling = new BABYLON.Vector3(1.0, 1.0, 0.65);
+      torsoLower.material = shirtMat;
+      torsoLower.parent = root;
+      shadowGenerator.addShadowCaster(torsoLower);
+
+      const shoulderYoke = BABYLON.MeshBuilder.CreateCylinder(`${idPrefix}_shoulder`, {
+        diameter: 0.22,
+        height: isFemale ? 0.74 : 0.84,
+        tessellation: 16
+      }, scene);
+      shoulderYoke.rotation.z = Math.PI / 2;
+      shoulderYoke.position.set(0, 1.56, 0);
+      shoulderYoke.material = shirtMat;
+      shoulderYoke.parent = root;
+      shadowGenerator.addShadowCaster(shoulderYoke);
+
+      const badgeMat = new BABYLON.StandardMaterial(`${idPrefix}_badgeMat`, scene);
+      badgeMat.diffuseColor = BABYLON.Color3.FromHexString(isTeacher ? "#F59E0B" : "#1D4ED8");
+      const badge = BABYLON.MeshBuilder.CreateBox(`${idPrefix}_badge`, { width: 0.11, height: 0.08, depth: 0.03 }, scene);
+      badge.position.set(isFemale ? 0.16 : 0.19, 1.44, isFemale ? 0.20 : 0.23);
+      badge.material = badgeMat;
+      badge.parent = root;
+
+      // Crisp Shirt Collar & School Tie / Teacher Scarf Detail
+      const collarMat = new BABYLON.PBRMaterial(`${idPrefix}_collarMat`, scene);
+      collarMat.albedoColor = BABYLON.Color3.FromHexString(isTeacher ? "#FEF3C7" : "#FFFFFF");
+      collarMat.roughness = 0.75;
+      const collar = BABYLON.MeshBuilder.CreateTorus(`${idPrefix}_collar`, { diameter: 0.27, thickness: 0.045, tessellation: 18 }, scene);
+      collar.position.set(0, 1.63, 0.01);
+      collar.rotation.x = 0.18;
+      collar.material = collarMat;
+      collar.parent = root;
+
+      if (!isTeacher) {
+        const tieMat = new BABYLON.PBRMaterial(`${idPrefix}_tieMat`, scene);
+        tieMat.albedoColor = BABYLON.Color3.FromHexString("#1E3A8A");
+        tieMat.roughness = 0.65;
+        const tieKnot = BABYLON.MeshBuilder.CreateBox(`${idPrefix}_tieKnot`, { width: 0.065, height: 0.065, depth: 0.05 }, scene);
+        tieKnot.position.set(0, 1.56, isFemale ? 0.19 : 0.22);
+        tieKnot.material = tieMat;
+        tieKnot.parent = root;
+
+        const tieBlade = BABYLON.MeshBuilder.CreateBox(`${idPrefix}_tieBlade`, { width: 0.075, height: 0.30, depth: 0.03 }, scene);
+        tieBlade.position.set(0, 1.38, isFemale ? 0.195 : 0.225);
+        tieBlade.material = tieMat;
+        tieBlade.parent = root;
+
+        // Waist Belt with Metallic Buckle
+        const beltMat = new BABYLON.PBRMaterial(`${idPrefix}_beltMat`, scene);
+        beltMat.albedoColor = BABYLON.Color3.FromHexString("#0F172A");
+        beltMat.roughness = 0.5;
+        const belt = BABYLON.MeshBuilder.CreateCylinder(`${idPrefix}_belt`, {
+          diameterTop: isFemale ? 0.54 : 0.61,
+          diameterBottom: isFemale ? 0.55 : 0.62,
+          height: 0.07,
+          tessellation: 18
+        }, scene);
+        belt.position.y = 0.80;
+        belt.scaling = new BABYLON.Vector3(1.0, 1.0, 0.66);
+        belt.material = beltMat;
+        belt.parent = root;
+
+        // Student Backpack on Back
+        const bagMat = new BABYLON.PBRMaterial(`${idPrefix}_bagMat`, scene);
+        bagMat.albedoColor = BABYLON.Color3.FromHexString(isFemale ? "#0284C7" : "#1E293B");
+        bagMat.roughness = 0.72;
+        const backpack = BABYLON.MeshBuilder.CreateBox(`${idPrefix}_backpack`, { width: 0.38, height: 0.46, depth: 0.18 }, scene);
+        backpack.position.set(0, 1.28, -0.24);
+        backpack.material = bagMat;
+        backpack.parent = root;
+        shadowGenerator.addShadowCaster(backpack);
+      }
+
+      // 2. Neck
+      const neck = BABYLON.MeshBuilder.CreateCylinder(`${idPrefix}_neck`, {
+        diameterTop: 0.21,
+        diameterBottom: 0.24,
+        height: 0.22,
+        tessellation: 14
+      }, scene);
+      neck.position.y = 1.72;
+      neck.material = isHijab ? hijabMat : skinMat;
+      neck.parent = root;
+
+      // 3. Head Group (Natural Oval / Elongated Head)
+      const headGroup = new BABYLON.TransformNode(`${idPrefix}_headGroup`, scene);
+      headGroup.position = new BABYLON.Vector3(0, 2.05, 0);
+      headGroup.parent = root;
+
+      // Single unified head mesh rotated so front texture faces +Z and UV seam stays at -Z
+      const faceMask = BABYLON.MeshBuilder.CreateSphere(`${idPrefix}_faceMask`, {
+        diameterX: 0.48,
+        diameterY: 0.56,
+        diameterZ: 0.50,
+        segments: 24
+      }, scene);
+      faceMask.rotation.y = Math.PI / 2;
+      faceMask.material = faceMat;
+      faceMask.parent = headGroup;
+      shadowGenerator.addShadowCaster(faceMask);
+
+      const nose = BABYLON.MeshBuilder.CreateSphere(`${idPrefix}_nose`, {
+        diameterX: 0.036,
+        diameterY: 0.052,
+        diameterZ: 0.034,
+        segments: 10
+      }, scene);
+      nose.position = new BABYLON.Vector3(0, -0.015, 0.246);
+      nose.material = skinMat;
+      nose.parent = headGroup;
+
+      if (isHijab) {
+        // Kubah hijab mulus membingkai kepala tanpa tonjolan silinder di dahi
+        const hijabBackHood = BABYLON.MeshBuilder.CreateSphere(`${idPrefix}_hijabHood`, {
+          diameterX: 0.54,
+          diameterY: 0.60,
+          diameterZ: 0.55,
+          segments: 22
+        }, scene);
+        hijabBackHood.position.set(0, 0.025, -0.055);
+        hijabBackHood.material = hijabMat;
+        hijabBackHood.parent = headGroup;
+        shadowGenerator.addShadowCaster(hijabBackHood);
+
+        const hijabBun = BABYLON.MeshBuilder.CreateSphere(`${idPrefix}_hijabBun`, {
+          diameter: 0.24,
+          segments: 14
+        }, scene);
+        hijabBun.position.set(0, 0.02, -0.31);
+        hijabBun.material = hijabMat;
+        hijabBun.parent = headGroup;
+
+        const chinWrap = BABYLON.MeshBuilder.CreateCylinder(`${idPrefix}_chinWrap`, {
+          diameterTop: 0.34,
+          diameterBottom: 0.38,
+          height: 0.16,
+          tessellation: 16
+        }, scene);
+        chinWrap.position.set(0, -0.26, -0.02);
+        chinWrap.material = hijabMat;
+        chinWrap.parent = headGroup;
+
+        const frontDrape = BABYLON.MeshBuilder.CreateCylinder(`${idPrefix}_frontDrape`, {
+          diameterTop: 0.42,
+          diameterBottom: 0.64,
+          height: 0.46,
+          tessellation: 18
+        }, scene);
+        frontDrape.position.set(0, 1.54, 0.02);
+        frontDrape.scaling = new BABYLON.Vector3(1.0, 1.0, 0.72);
+        frontDrape.material = hijabMat;
+        frontDrape.parent = root;
+        shadowGenerator.addShadowCaster(frontDrape);
+      } else {
+        // Rambut pendek laki-laki (atas, tengkuk belakang, jambang samping & telinga) tanpa lapisan coklat muda
+        const hairCrown = BABYLON.MeshBuilder.CreateSphere(`${idPrefix}_hairCrown`, {
+          diameterX: 0.505,
+          diameterY: 0.34,
+          diameterZ: 0.525,
+          segments: 18
+        }, scene);
+        hairCrown.position.set(0, 0.155, -0.015);
+        hairCrown.material = hairMat;
+        hairCrown.parent = headGroup;
+        shadowGenerator.addShadowCaster(hairCrown);
+
+        const hairBack = BABYLON.MeshBuilder.CreateSphere(`${idPrefix}_hairBack`, {
+          diameterX: 0.495,
+          diameterY: 0.48,
+          diameterZ: 0.46,
+          segments: 18
+        }, scene);
+        hairBack.position.set(0, 0.03, -0.065);
+        hairBack.material = hairMat;
+        hairBack.parent = headGroup;
+        shadowGenerator.addShadowCaster(hairBack);
+
+        [-1, 1].forEach((sideSign, idx) => {
+          const sideburn = BABYLON.MeshBuilder.CreateBox(`${idPrefix}_sideburn_${idx}`, {
+            width: 0.035,
+            height: 0.14,
+            depth: 0.09
+          }, scene);
+          sideburn.position.set(sideSign * 0.232, 0.04, 0.015);
+          sideburn.material = hairMat;
+          sideburn.parent = headGroup;
+
+          const ear = BABYLON.MeshBuilder.CreateSphere(`${idPrefix}_ear_${idx}`, {
+            diameterX: 0.045,
+            diameterY: 0.095,
+            diameterZ: 0.075,
+            segments: 10
+          }, scene);
+          ear.position.set(sideSign * 0.242, -0.01, -0.01);
+          ear.material = skinMat;
+          ear.parent = headGroup;
+        });
+      }
+
+      // 4. Arms with Articulated Elbow Joint & Detailed Hands
+      function buildArmWithHand(sideSign, sideName) {
+        const armPivot = new BABYLON.TransformNode(`${idPrefix}_armPivot_${sideName}`, scene);
+        armPivot.position = new BABYLON.Vector3(sideSign * (isFemale ? 0.37 : 0.42), 1.56, 0);
+        armPivot.parent = root;
+
+        const shoulderCap = BABYLON.MeshBuilder.CreateSphere(`${idPrefix}_shCap_${sideName}`, {
+          diameter: 0.21,
+          segments: 12
+        }, scene);
+        shoulderCap.position.y = 0.0;
+        shoulderCap.material = shirtMat;
+        shoulderCap.parent = armPivot;
+
+        const upperSleeve = BABYLON.MeshBuilder.CreateCylinder(`${idPrefix}_uArm_${sideName}`, {
+          diameterTop: 0.20,
+          diameterBottom: 0.165,
+          height: 0.34,
+          tessellation: 14
+        }, scene);
+        upperSleeve.position.y = -0.17;
+        upperSleeve.material = shirtMat;
+        upperSleeve.parent = armPivot;
+        shadowGenerator.addShadowCaster(upperSleeve);
+
+        const elbowPivot = new BABYLON.TransformNode(`${idPrefix}_elbowPivot_${sideName}`, scene);
+        elbowPivot.position = new BABYLON.Vector3(0, -0.34, 0);
+        elbowPivot.rotation.x = -0.22;
+        elbowPivot.parent = armPivot;
+
+        const elbowCap = BABYLON.MeshBuilder.CreateSphere(`${idPrefix}_elCap_${sideName}`, {
+          diameter: 0.165,
+          segments: 10
+        }, scene);
+        elbowCap.material = isHijab ? shirtMat : skinMat;
+        elbowCap.parent = elbowPivot;
+
+        const foreArm = BABYLON.MeshBuilder.CreateCylinder(`${idPrefix}_fArm_${sideName}`, {
+          diameterTop: 0.16,
+          diameterBottom: 0.125,
+          height: 0.33,
+          tessellation: 14
+        }, scene);
+        foreArm.position.y = -0.165;
+        foreArm.material = isHijab ? shirtMat : skinMat;
+        foreArm.parent = elbowPivot;
+        shadowGenerator.addShadowCaster(foreArm);
+
+        const palm = BABYLON.MeshBuilder.CreateBox(`${idPrefix}_palm_${sideName}`, {
+          width: 0.065,
+          height: 0.11,
+          depth: 0.11
+        }, scene);
+        palm.position.y = -0.37;
+        palm.material = skinMat;
+        palm.parent = elbowPivot;
+
+        const thumb = BABYLON.MeshBuilder.CreateCylinder(`${idPrefix}_thumb_${sideName}`, {
+          diameter: 0.026,
+          height: 0.065,
+          tessellation: 8
+        }, scene);
+        thumb.position.set(-sideSign * 0.015, -0.365, 0.062);
+        thumb.rotation.x = 0.55;
+        thumb.material = skinMat;
+        thumb.parent = elbowPivot;
+
+        [0.036, 0.012, -0.012, -0.036].forEach((fz, fi) => {
+          const fingerLengths = [0.068, 0.076, 0.072, 0.058];
+          const finger = BABYLON.MeshBuilder.CreateCylinder(`${idPrefix}_f_${sideName}_${fi}`, {
+            diameter: 0.021,
+            height: fingerLengths[fi],
+            tessellation: 8
+          }, scene);
+          finger.position.set(0, -0.42 - fingerLengths[fi] * 0.35, fz);
+          finger.rotation.z = -sideSign * 0.12;
+          finger.material = skinMat;
+          finger.parent = elbowPivot;
+        });
+
+        return { armPivot, elbowPivot };
+      }
+
+      const leftArmRig = buildArmWithHand(-1, "L");
+      const rightArmRig = buildArmWithHand(1, "R");
+      const leftArmPivot = leftArmRig.armPivot;
+      const rightArmPivot = rightArmRig.armPivot;
+      const leftElbowPivot = leftArmRig.elbowPivot;
+      const rightElbowPivot = rightArmRig.elbowPivot;
+
+      // 5. Legs with Articulated Knee Joint, Skirt (for female) & Shoes
+      if (isFemale) {
+        const longSkirt = BABYLON.MeshBuilder.CreateCylinder(`${idPrefix}_skirt`, {
+          diameterTop: 0.56,
+          diameterBottom: 0.72,
+          height: 0.72,
+          tessellation: 20
+        }, scene);
+        longSkirt.position.y = 0.44;
+        longSkirt.scaling = new BABYLON.Vector3(1.0, 1.0, 0.76);
+        longSkirt.material = bottomMat;
+        longSkirt.parent = root;
+        shadowGenerator.addShadowCaster(longSkirt);
+      }
+
+      const leftLegPivot = new BABYLON.TransformNode(`${idPrefix}_legPivot_L`, scene);
+      leftLegPivot.position = new BABYLON.Vector3(-0.16, 0.78, 0);
+      leftLegPivot.parent = root;
+
+      const rightLegPivot = new BABYLON.TransformNode(`${idPrefix}_legPivot_R`, scene);
+      rightLegPivot.position = new BABYLON.Vector3(0.16, 0.78, 0);
+      rightLegPivot.parent = root;
+
+      function buildLegWithKnee(hipPivot, name) {
+        const thighMesh = BABYLON.MeshBuilder.CreateCylinder(`${idPrefix}_thigh_${name}`, {
+          diameterTop: 0.22,
+          diameterBottom: 0.185,
+          height: 0.35,
+          tessellation: 14
+        }, scene);
+        thighMesh.position.y = -0.175;
+        thighMesh.material = bottomMat;
+        thighMesh.parent = hipPivot;
+        shadowGenerator.addShadowCaster(thighMesh);
+
+        const kneePivot = new BABYLON.TransformNode(`${idPrefix}_kneePivot_${name}`, scene);
+        kneePivot.position = new BABYLON.Vector3(0, -0.35, 0);
+        kneePivot.parent = hipPivot;
+
+        const kneeCap = BABYLON.MeshBuilder.CreateSphere(`${idPrefix}_kneeCap_${name}`, {
+          diameter: 0.185,
+          segments: 10
+        }, scene);
+        kneeCap.material = bottomMat;
+        kneeCap.parent = kneePivot;
+
+        const calfMesh = BABYLON.MeshBuilder.CreateCylinder(`${idPrefix}_calf_${name}`, {
+          diameterTop: 0.18,
+          diameterBottom: 0.15,
+          height: 0.34,
+          tessellation: 14
+        }, scene);
+        calfMesh.position.y = -0.17;
+        calfMesh.material = bottomMat;
+        calfMesh.parent = kneePivot;
+        shadowGenerator.addShadowCaster(calfMesh);
+
+        const shoe = BABYLON.MeshBuilder.CreateBox(`${idPrefix}_shoe_${name}`, {
+          width: 0.18,
+          height: 0.11,
+          depth: 0.30
+        }, scene);
+        shoe.position = new BABYLON.Vector3(0, -0.37, 0.05);
+        shoe.material = shoeMat;
+        shoe.parent = kneePivot;
+        shadowGenerator.addShadowCaster(shoe);
+
+        return kneePivot;
+      }
+
+      const leftKneePivot = buildLegWithKnee(leftLegPivot, "L");
+      const rightKneePivot = buildLegWithKnee(rightLegPivot, "R");
+
+      return {
+        root,
+        headGroup,
+        leftArmPivot,
+        rightArmPivot,
+        leftElbowPivot,
+        rightElbowPivot,
+        leftLegPivot,
+        rightLegPivot,
+        leftKneePivot,
+        rightKneePivot
+      };
+    }
 
     /**
-     * 6. INPUT CONTROLS (KEYBOARD, MOUSE ORBIT & MOBILE TOUCH JOYSTICK)
+     * 6. SPAWN PLAYER, IBU RIA (MAIN NPC) & DYNAMIC 3D OPEN BOOK SYMBOLS
+     */
+    const worldLabelsLayer = document.getElementById('world-labels-layer');
+
+    let player = createAnatomicalCharacter("player", {
+      gender: "male",
+      shirtHex: "#F5F5F5",
+      bottomHex: "#555B65",
+      shoeHex: "#202124"
+    });
+    player.root.position = new BABYLON.Vector3(0, 0.04, 12);
+    player.root.rotation.y = Math.PI;
+
+    function rebuildPlayerAvatar(gender) {
+      const oldPos = player.root.position.clone();
+      const oldRotY = player.root.rotation.y;
+      player.root.dispose();
+
+      player = createAnatomicalCharacter("player", {
+        gender: gender,
+        shirtHex: "#F5F5F5",
+        bottomHex: "#555B65",
+        shoeHex: "#202124",
+        hijabHex: "#F5F5F5"
+      });
+      player.root.position = oldPos;
+      player.root.rotation.y = oldRotY;
+    }
+
+    document.querySelectorAll('input[name="avatar-gender"]').forEach((radio) => {
+      radio.addEventListener('change', (e) => {
+        gameState.avatarGender = e.target.value;
+        rebuildPlayerAvatar(e.target.value);
+      });
+    });
+
+    // Ibu Ria (Seragam Guru PNS Khaki Autentik #A6895B / #856A40)
+    const IBU_RIA_CONFIG = {
+      name: "Ibu Ria",
+      role: "Guru Pembimbing Bisnis Digital",
+      position: { x: 0, z: -13.5 },
+      rotationY: 0
+    };
+
+    const ibuRiaChar = createAnatomicalCharacter("iburia", {
+      gender: "female",
+      isTeacher: true,
+      shirtHex: "#A6895B",
+      bottomHex: "#856A40",
+      hijabHex: "#A6895B",
+      shoeHex: "#202124"
+    });
+    ibuRiaChar.root.position = new BABYLON.Vector3(IBU_RIA_CONFIG.position.x, 0.04, IBU_RIA_CONFIG.position.z);
+    ibuRiaChar.root.rotation.y = IBU_RIA_CONFIG.rotationY;
+
+    const ibuRiaRingMat = new BABYLON.StandardMaterial("ibuRiaRingMat", scene);
+    ibuRiaRingMat.diffuseColor = BABYLON.Color3.FromHexString("#FBBF24");
+    ibuRiaRingMat.emissiveColor = BABYLON.Color3.FromHexString("#D97706");
+    const ibuRiaRing = BABYLON.MeshBuilder.CreateTorus("ibuRiaRing", { diameter: 2.5, thickness: 0.09, tessellation: 36 }, scene);
+    ibuRiaRing.position = new BABYLON.Vector3(IBU_RIA_CONFIG.position.x, 0.08, IBU_RIA_CONFIG.position.z);
+    ibuRiaRing.material = ibuRiaRingMat;
+
+    const ibuRiaBeaconMat = new BABYLON.StandardMaterial("ibuRiaBeaconMat", scene);
+    ibuRiaBeaconMat.diffuseColor = BABYLON.Color3.FromHexString("#FBBF24");
+    ibuRiaBeaconMat.emissiveColor = BABYLON.Color3.FromHexString("#D97706");
+    const ibuRiaBeacon = BABYLON.MeshBuilder.CreatePolyhedron("ibuRiaBeacon", { type: 1, size: 0.28 }, scene);
+    ibuRiaBeacon.position = new BABYLON.Vector3(IBU_RIA_CONFIG.position.x, 2.95, IBU_RIA_CONFIG.position.z);
+    ibuRiaBeacon.material = ibuRiaBeaconMat;
+
+    const ibuRiaLabelEl = document.createElement('div');
+    ibuRiaLabelEl.className = "absolute top-0 left-0 transition-opacity duration-150";
+    ibuRiaLabelEl.innerHTML = `
+      <div class="bg-slate-900/90 backdrop-blur-sm text-white px-3 py-1.5 rounded-xl border border-amber-400/50 shadow-lg text-center whitespace-nowrap">
+        <div class="text-xs font-extrabold leading-tight">Ibu Ria</div>
+        <div class="text-[10px] font-semibold text-amber-300 leading-tight">Guru Pembimbing</div>
+        <span id="iburia-status-pill" class="inline-block mt-1 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/40">
+          Temui untuk Mulai
+        </span>
+      </div>
+    `;
+    worldLabelsLayer.appendChild(ibuRiaLabelEl);
+
+    // Dynamic 3D Open Book Symbols Builder (1 Buku Terbuka ke Atas, Dibedakan Warna per Buku)
+    let bookEntities = [];
+    const BOOK_THEME_PALETTE = [
+      { coverHex: "#1D4ED8", ringHex: "#3B82F6", emissiveHex: "#1E40AF" }, // Buku 1: Biru Kerajaan
+      { coverHex: "#059669", ringHex: "#10B981", emissiveHex: "#047857" }, // Buku 2: Hijau Zamrud
+      { coverHex: "#7C3AED", ringHex: "#8B5CF6", emissiveHex: "#5B21B6" }, // Buku 3: Ungu Indigo
+      { coverHex: "#D97706", ringHex: "#F59E0B", emissiveHex: "#B45309" }, // Buku 4: Amber Emas
+      { coverHex: "#DB2777", ringHex: "#EC4899", emissiveHex: "#9D174D" }, // Buku 5: Magenta
+      { coverHex: "#0891B2", ringHex: "#06B6D4", emissiveHex: "#0E7490" }  // Buku 6: Cyan
+    ];
+
+    function createOpenBookMesh(prefix, coverMat, pageMat, goldMat) {
+      const bookNode = new BABYLON.TransformNode(`${prefix}_book`, scene);
+
+      const spine = BABYLON.MeshBuilder.CreateCylinder(`${prefix}_spine`, { diameter: 0.14, height: 1.05, tessellation: 12 }, scene);
+      spine.rotation.x = Math.PI / 2;
+      spine.position.y = -0.04;
+      spine.material = goldMat;
+      spine.parent = bookNode;
+
+      const leftPivot = new BABYLON.TransformNode(`${prefix}_lPivot`, scene);
+      leftPivot.rotation.z = -0.34;
+      leftPivot.parent = bookNode;
+
+      const leftCover = BABYLON.MeshBuilder.CreateBox(`${prefix}_lCov`, { width: 0.72, height: 0.05, depth: 1.05 }, scene);
+      leftCover.position.set(-0.36, -0.02, 0);
+      leftCover.material = coverMat;
+      leftCover.parent = leftPivot;
+
+      const leftPage = BABYLON.MeshBuilder.CreateBox(`${prefix}_lPage`, { width: 0.66, height: 0.06, depth: 0.96 }, scene);
+      leftPage.position.set(-0.34, 0.03, 0);
+      leftPage.material = pageMat;
+      leftPage.parent = leftPivot;
+
+      const rightPivot = new BABYLON.TransformNode(`${prefix}_rPivot`, scene);
+      rightPivot.rotation.z = 0.34;
+      rightPivot.parent = bookNode;
+
+      const rightCover = BABYLON.MeshBuilder.CreateBox(`${prefix}_rCov`, { width: 0.72, height: 0.05, depth: 1.05 }, scene);
+      rightCover.position.set(0.36, -0.02, 0);
+      rightCover.material = coverMat;
+      rightCover.parent = rightPivot;
+
+      const rightPage = BABYLON.MeshBuilder.CreateBox(`${prefix}_rPage`, { width: 0.66, height: 0.06, depth: 0.96 }, scene);
+      rightPage.position.set(0.34, 0.03, 0);
+      rightPage.material = pageMat;
+      rightPage.parent = rightPivot;
+
+      return bookNode;
+    }
+
+    function rebuild3DBookEntities() {
+      bookEntities.forEach((ent) => {
+        ent.rootGroup.dispose();
+        ent.softLight.dispose();
+        if (ent.labelEl && ent.labelEl.parentNode) ent.labelEl.parentNode.removeChild(ent.labelEl);
+      });
+      bookEntities = [];
+
+      const pageMat = new BABYLON.PBRMaterial("bookPageMat", scene);
+      pageMat.albedoColor = BABYLON.Color3.FromHexString("#FFFBEB");
+      pageMat.metallic = 0.0;
+      pageMat.roughness = 0.8;
+
+      const goldMat = new BABYLON.PBRMaterial("bookGoldMat", scene);
+      goldMat.albedoColor = BABYLON.Color3.FromHexString("#F59E0B");
+      goldMat.metallic = 0.4;
+      goldMat.roughness = 0.35;
+
+      bookGroups.forEach((bookData, bIdx) => {
+        const theme = BOOK_THEME_PALETTE[bIdx % BOOK_THEME_PALETTE.length];
+
+        const coverMat = new BABYLON.PBRMaterial(`${bookData.id}_coverMat`, scene);
+        coverMat.albedoColor = BABYLON.Color3.FromHexString(theme.coverHex);
+        coverMat.metallic = 0.12;
+        coverMat.roughness = 0.55;
+
+        const rootGroup = new BABYLON.TransformNode(`${bookData.id}_grp`, scene);
+        rootGroup.position = new BABYLON.Vector3(bookData.position.x, 0.05, bookData.position.z);
+
+        const outerRingMat = new BABYLON.StandardMaterial(`${bookData.id}_ringMat`, scene);
+        outerRingMat.diffuseColor = BABYLON.Color3.FromHexString(theme.ringHex);
+        outerRingMat.emissiveColor = BABYLON.Color3.FromHexString(theme.emissiveHex);
+
+        const outerRing = BABYLON.MeshBuilder.CreateTorus(`${bookData.id}_ring`, {
+          diameter: 2.75,
+          thickness: 0.08,
+          tessellation: 40
+        }, scene);
+        outerRing.position.y = 0.05;
+        outerRing.material = outerRingMat;
+        outerRing.parent = rootGroup;
+
+        const softLight = new BABYLON.PointLight(`${bookData.id}_light`, new BABYLON.Vector3(bookData.position.x, 1.8, bookData.position.z), scene);
+        softLight.diffuse = BABYLON.Color3.FromHexString(theme.ringHex);
+        softLight.intensity = 0.42;
+        softLight.range = 6.5;
+
+        const booksHolder = new BABYLON.TransformNode(`${bookData.id}_holder`, scene);
+        booksHolder.position.y = 1.45;
+        booksHolder.rotation.x = 0.35;
+        booksHolder.parent = rootGroup;
+
+        const m = createOpenBookMesh(`${bookData.id}_m1`, coverMat, pageMat, goldMat);
+        m.scaling = new BABYLON.Vector3(0.95, 0.95, 0.95);
+        m.parent = booksHolder;
+
+        const labelEl = document.createElement('div');
+        labelEl.className = "absolute top-0 left-0 transition-opacity duration-150";
+        labelEl.innerHTML = `
+          <div class="bg-slate-900/90 backdrop-blur-sm text-white px-3 py-1.5 rounded-xl border border-white/25 shadow-lg text-center whitespace-nowrap">
+            <div class="text-xs font-extrabold leading-tight flex items-center justify-center gap-1.5">
+              <span class="w-2.5 h-2.5 rounded-full inline-block" style="background-color:${theme.ringHex}"></span>
+              <span>📘 ${bookData.title}</span>
+            </div>
+            <div class="text-[10px] font-semibold text-amber-300 leading-tight">${bookData.rangeLabel} (${bookData.questions.length} Soal)</div>
+            <span class="book-status-pill inline-block mt-1 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/40">
+              Belum Selesai
+            </span>
+          </div>
+        `;
+        worldLabelsLayer.appendChild(labelEl);
+
+        bookEntities.push({
+          data: bookData,
+          rootGroup,
+          booksHolder,
+          outerRingMat,
+          softLight,
+          labelEl
+        });
+      });
+    }
+
+    rebuild3DBookEntities();
+
+    /**
+     * 7. P2P CLASSROOM MULTIPLAYER (PEERJS WEBRTC + LOCAL TAB BROADCAST)
+     */
+    const remotePlayers = new Map();
+    let myPeer = null;
+    let myPeerId = `local_${Math.random().toString(36).substring(2, 10)}`;
+    const activeConnections = new Map();
+    let localBroadcastChannel = null;
+
+    function sanitizeRoomSlug(className) {
+      const clean = className.toLowerCase().replace(/[^a-z0-9]/g, '');
+      return clean || 'kelasumum';
+    }
+
+    function updateOnlineCountHUD() {
+      const countEl = document.getElementById('hud-mp-count');
+      if (countEl) {
+        countEl.textContent = `${remotePlayers.size + 1} Online`;
+      }
+    }
+
+    function spawnOrUpdateRemotePeer(peerId, data) {
+      if (!peerId || peerId === myPeerId) return;
+
+      let entry = remotePlayers.get(peerId);
+      if (!entry) {
+        const charObj = createAnatomicalCharacter(`peer_${peerId}`, {
+          gender: data.gender || "male",
+          shirtHex: "#F5F5F5",
+          bottomHex: "#555B65",
+          shoeHex: "#202124",
+          hijabHex: "#F5F5F5"
+        });
+        charObj.root.position = new BABYLON.Vector3(data.x || 0, 0.04, data.z || 10);
+        charObj.root.rotation.y = data.ry || 0;
+
+        const labelEl = document.createElement('div');
+        labelEl.className = "absolute top-0 left-0 pointer-events-none transition-opacity duration-150";
+        labelEl.innerHTML = `
+          <div class="bg-violet-950/85 backdrop-blur-sm text-white px-2.5 py-1 rounded-xl border border-violet-400/50 shadow-md text-center whitespace-nowrap">
+            <div class="text-[11px] font-bold leading-tight">${data.name || 'Teman Sekelas'}</div>
+            <div class="text-[9px] font-medium text-violet-300 leading-tight">${data.kelas || ''}</div>
+          </div>
+        `;
+        worldLabelsLayer.appendChild(labelEl);
+
+        entry = {
+          charObj,
+          labelEl,
+          targetPos: new BABYLON.Vector3(data.x || 0, 0.04, data.z || 10),
+          targetRotY: data.ry || 0,
+          isMoving: Boolean(data.moving),
+          lastSeen: Date.now()
+        };
+        remotePlayers.set(peerId, entry);
+        updateOnlineCountHUD();
+      } else {
+        entry.targetPos.set(data.x, 0.04, data.z);
+        entry.targetRotY = data.ry;
+        entry.isMoving = Boolean(data.moving);
+        entry.lastSeen = Date.now();
+      }
+    }
+
+    function removeRemotePeer(peerId) {
+      const entry = remotePlayers.get(peerId);
+      if (entry) {
+        entry.charObj.root.dispose();
+        if (entry.labelEl && entry.labelEl.parentNode) {
+          entry.labelEl.parentNode.removeChild(entry.labelEl);
+        }
+        remotePlayers.delete(peerId);
+        activeConnections.delete(peerId);
+        updateOnlineCountHUD();
+      }
+    }
+
+    function setupDataConnection(conn) {
+      if (!conn || conn.peer === myPeerId) return;
+      conn.on('open', () => {
+        activeConnections.set(conn.peer, conn);
+      });
+      conn.on('data', (msg) => {
+        if (msg && msg.type === 'state') {
+          spawnOrUpdateRemotePeer(conn.peer, msg);
+          if (Array.isArray(msg.knownPeers) && myPeer) {
+            msg.knownPeers.forEach((otherId) => {
+              if (otherId !== myPeerId && !activeConnections.has(otherId)) {
+                try {
+                  const newConn = myPeer.connect(otherId, { reliable: false });
+                  setupDataConnection(newConn);
+                } catch (e) {}
+              }
+            });
+          }
+        }
+      });
+      conn.on('close', () => removeRemotePeer(conn.peer));
+      conn.on('error', () => removeRemotePeer(conn.peer));
+    }
+
+    function initLocalTabSync(roomSlug) {
+      if (typeof BroadcastChannel === 'undefined') return;
+      try {
+        localBroadcastChannel = new BroadcastChannel(`smkn1cilegon_room_${roomSlug}`);
+        localBroadcastChannel.onmessage = (ev) => {
+          const msg = ev.data;
+          if (msg && msg.type === 'state' && msg.senderId && msg.senderId !== myPeerId) {
+            spawnOrUpdateRemotePeer(msg.senderId, msg);
+          } else if (msg && msg.type === 'bye' && msg.senderId) {
+            removeRemotePeer(msg.senderId);
+          }
+        };
+      } catch (e) {
+        localBroadcastChannel = null;
+      }
+    }
+
+    function isRestrictedPreviewHost() {
+      const host = window.location.hostname || "";
+      const proto = window.location.protocol || "";
+      return (
+        proto === "blob:" ||
+        proto === "about:" ||
+        host.includes("googleusercontent") ||
+        host.includes("scf.usercontent") ||
+        host.includes("webcontainer") ||
+        window.self !== window.top
+      );
+    }
+
+    function initClassroomMultiplayer(studentClass) {
+      const roomSlug = sanitizeRoomSlug(studentClass);
+      initLocalTabSync(roomSlug);
+
+      // Skip external PeerJS WebSocket when running inside strict sandboxed Canvas iframe
+      if (typeof Peer === 'undefined' || isRestrictedPreviewHost()) {
+        return;
+      }
+
+      const maxSlots = 20;
+      let attemptSlot = Math.floor(Math.random() * maxSlots) + 1;
+
+      function tryClaimSlot(slot, retriesLeft) {
+        if (retriesLeft <= 0) return;
+        const candidateId = `smkn1cilegon-${roomSlug}-s${slot}`;
+        let peer;
+        try {
+          peer = new Peer(candidateId, { debug: 0 });
+        } catch (err) {
+          return;
+        }
+
+        peer.on('open', (id) => {
+          myPeer = peer;
+          myPeerId = id;
+
+          // Connect to other active slots in the same classroom
+          for (let s = 1; s <= maxSlots; s++) {
+            const targetId = `smkn1cilegon-${roomSlug}-s${s}`;
+            if (targetId !== id) {
+              try {
+                const conn = peer.connect(targetId, { reliable: false });
+                setupDataConnection(conn);
+              } catch (e) {}
+            }
+          }
+        });
+
+        peer.on('connection', (conn) => {
+          setupDataConnection(conn);
+        });
+
+        peer.on('error', (err) => {
+          if (err && err.type === 'unavailable-id') {
+            try { peer.destroy(); } catch (e) {}
+            tryClaimSlot((slot % maxSlots) + 1, retriesLeft - 1);
+          }
+        });
+      }
+
+      try {
+        tryClaimSlot(attemptSlot, maxSlots);
+      } catch (e) {
+        // Fallback silently to local tab sync if WebSocket is blocked
+      }
+    }
+
+    window.addEventListener('beforeunload', () => {
+      if (localBroadcastChannel) {
+        try {
+          localBroadcastChannel.postMessage({ type: 'bye', senderId: myPeerId });
+        } catch (e) {}
+      }
+    });
+
+    let lastBroadcastTime = 0;
+    function broadcastMyState(isMoving) {
+      const now = performance.now();
+      if (now - lastBroadcastTime < 90) return;
+      lastBroadcastTime = now;
+
+      const knownPeers = Array.from(activeConnections.keys());
+      const packet = {
+        type: 'state',
+        senderId: myPeerId,
+        name: gameState.studentName,
+        kelas: gameState.studentClass,
+        gender: gameState.avatarGender,
+        x: Math.round(player.root.position.x * 100) / 100,
+        z: Math.round(player.root.position.z * 100) / 100,
+        ry: Math.round(player.root.rotation.y * 100) / 100,
+        moving: isMoving,
+        knownPeers
+      };
+
+      if (localBroadcastChannel) {
+        try { localBroadcastChannel.postMessage(packet); } catch (e) {}
+      }
+
+      if (myPeer && activeConnections.size > 0) {
+        activeConnections.forEach((conn) => {
+          if (conn.open) {
+            try { conn.send(packet); } catch (e) {}
+          }
+        });
+      }
+    }
+
+    /**
+     * 8. CAMERA & INPUT CONTROLS (MIRROR MOUSE ORBIT + WASD/ARROWS + TOUCH JOYSTICK)
      */
     const keys = { w: false, a: false, s: false, d: false, ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
     let cameraYaw = 0;
@@ -1150,8 +2688,8 @@
       const lower = e.key.toLowerCase();
       if (lower in keys) keys[lower] = true;
 
-      if ((lower === 'e' || e.key === 'Enter') && gameState.isPlaying && !gameState.isModalOpen && gameState.nearbyNpc) {
-        openQuizForNpc(gameState.nearbyNpc);
+      if ((lower === 'e' || e.key === 'Enter') && gameState.isPlaying && !gameState.isModalOpen && gameState.nearbyTarget) {
+        triggerInteraction(gameState.nearbyTarget);
       }
     });
 
@@ -1161,7 +2699,7 @@
       if (lower in keys) keys[lower] = false;
     });
 
-    // Mouse / Touch Camera Orbit on Canvas
+    // Mirror / Reversed Drag Camera Rotation
     canvas.addEventListener('pointerdown', (e) => {
       if (!gameState.isPlaying || gameState.isModalOpen) return;
       isDraggingCamera = true;
@@ -1176,8 +2714,8 @@
       prevPointerX = e.clientX;
       prevPointerY = e.clientY;
 
-      cameraYaw -= dx * 0.0065;
-      cameraPitch = Math.max(-0.1, Math.min(0.85, cameraPitch + dy * 0.005));
+      cameraYaw += dx * 0.0065;
+      cameraPitch = Math.max(-0.1, Math.min(0.85, cameraPitch - dy * 0.005));
     });
 
     window.addEventListener('pointerup', () => {
@@ -1242,17 +2780,17 @@
     }
 
     /**
-     * 7. START SCREEN, HUD & AUDIO CONTROLS
+     * 9. TEACHER PANEL (PIN PROTECTED) & CSV/JSON QUESTION UPLOAD
      */
     const startModal = document.getElementById('start-modal');
     const startForm = document.getElementById('start-form');
     const startError = document.getElementById('start-error');
     const hudOverlay = document.getElementById('hud-overlay');
+    const hudQuestBanner = document.getElementById('hud-quest-banner');
     const interactionPrompt = document.getElementById('interaction-prompt');
     const interactionText = document.getElementById('interaction-text');
     const btnInteract = document.getElementById('btn-interact');
 
-    // Teacher PIN Gate & Protected Setup Panel Logic
     const btnOpenSheetSetup = document.getElementById('btn-open-sheet-setup');
     const sheetSetupPanel = document.getElementById('sheet-setup-panel');
     const teacherPinGate = document.getElementById('teacher-pin-gate');
@@ -1301,9 +2839,10 @@
         btnOpenSheetSetup.classList.remove("bg-emerald-500/30", "border-emerald-300/50");
       }
 
-      const totalQ = NPC_DATA.reduce((s, n) => s + n.questions.length, 0);
+      const totalQ = activeQuestionBank.length;
+      const totalBooks = bookGroups.length;
       const isCustom = Boolean(localStorage.getItem(STORAGE_KEY_CUSTOM_QUESTIONS));
-      questionBankStatus.innerHTML = `Bank Soal Aktif: <strong>${isCustom ? 'Kustom Guru' : 'Bawaan'} (${totalQ} Soal / 4 Pos)</strong>`;
+      questionBankStatus.innerHTML = `Bank Soal Aktif: <strong>${isCustom ? 'Kustom Guru' : 'Bawaan'} (${totalQ} Soal → ${totalBooks} Simbol Buku)</strong>`;
     }
     refreshSheetStatusBadge();
 
@@ -1394,7 +2933,6 @@
       showTeacherFeedback("✅ PIN Guru berhasil diperbarui!");
     });
 
-    // CSV Parser & Template Downloader for Teacher Question Upload
     function parseCsvLine(line, delimiter) {
       const result = [];
       let current = '';
@@ -1419,58 +2957,55 @@
       return result;
     }
 
-    function parseUploadedCsv(text) {
+    function parseUploadedCsvToBank(text) {
       const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
       if (lines.length < 2) throw new Error("File CSV kosong atau tidak memiliki baris soal.");
 
       const delimiter = lines[0].includes(';') ? ';' : ',';
-      const grouped = { pos1: [], pos2: [], pos3: [], pos4: [] };
       const letterMap = { A: 0, B: 1, C: 2, D: 3, '1': 0, '2': 1, '3': 2, '4': 3 };
+      const questions = [];
 
       for (let i = 1; i < lines.length; i++) {
         const cols = parseCsvLine(lines[i], delimiter);
         if (cols.length < 7) continue;
 
-        let posKey = cols[0].toLowerCase().replace(/\s+/g, '');
-        if (posKey === '1') posKey = 'pos1';
-        if (posKey === '2') posKey = 'pos2';
-        if (posKey === '3') posKey = 'pos3';
-        if (posKey === '4') posKey = 'pos4';
-
-        if (!grouped[posKey]) continue;
+        const topic = cols[0] || "Bisnis Digital";
+        const questionText = cols[1];
+        if (!questionText) continue;
 
         const keyRaw = (cols[6] || 'A').toUpperCase().trim();
         const correctIdx = keyRaw in letterMap ? letterMap[keyRaw] : 0;
 
-        grouped[posKey].push({
-          question: cols[1],
+        questions.push({
+          id: `Q${String(questions.length + 1).padStart(2, '0')}`,
+          topic: topic,
+          question: questionText,
           options: [cols[2], cols[3], cols[4], cols[5]],
           correctIndex: correctIdx,
           explanation: cols[7] || "Jawaban telah dicatat oleh sistem."
         });
       }
 
-      const totalParsed = Object.values(grouped).reduce((acc, arr) => acc + arr.length, 0);
-      if (totalParsed === 0) {
-        throw new Error("Tidak ada baris soal valid. Pastikan kolom pertama berisi pos1, pos2, pos3, atau pos4.");
+      if (questions.length === 0) {
+        throw new Error("Tidak ada baris soal valid di dalam file CSV.");
       }
-      return grouped;
+      return questions;
     }
 
     btnDownloadTemplate.addEventListener('click', () => {
       const csvRows = [
-        ["pos", "pertanyaan", "opsi_a", "opsi_b", "opsi_c", "opsi_d", "kunci", "pembahasan"],
-        ["pos1", "Apa tujuan utama membangun Brand Identity pada bisnis digital?", "Membedakan merek dan membangun kepercayaan konsumen", "Memperbesar ukuran file foto", "Menghindari pajak usaha", "Mengurangi jumlah karyawan"],
-        ["pos2", "Apa kepanjangan dari SEO dalam pemasaran digital?", "Search Engine Optimization", "Social Engagement Order", "Sales Executive Online", "System Enterprise Operation"],
-        ["pos3", "Blok pada Business Model Canvas yang berisi manfaat utama produk adalah...", "Value Propositions", "Cost Structure", "Key Partners", "Channels"],
-        ["pos4", "Bagian 3 detik pertama pada video TikTok/Reels untuk menarik perhatian disebut...", "Hook", "Caption", "Hashtag", "Bio Link"]
+        ["topik", "pertanyaan", "opsi_a", "opsi_b", "opsi_c", "opsi_d", "kunci", "pembahasan"],
+        ["Digital Branding", "Apa tujuan utama membangun Brand Identity pada bisnis digital?", "Membedakan merek dan membangun kepercayaan konsumen", "Memperbesar ukuran file foto", "Menghindari pajak usaha", "Mengurangi jumlah karyawan"],
+        ["SEO & SEM", "Apa kepanjangan dari SEO dalam pemasaran digital?", "Search Engine Optimization", "Social Engagement Order", "Sales Executive Online", "System Enterprise Operation"],
+        ["Kewirausahaan", "Blok pada Business Model Canvas yang berisi manfaat utama produk adalah...", "Value Propositions", "Cost Structure", "Key Partners", "Channels"],
+        ["Social Media", "Bagian 3 detik pertama pada video TikTok/Reels untuk menarik perhatian disebut...", "Hook", "Caption", "Hashtag", "Bio Link"]
       ];
       const csvContent = csvRows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
       const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "Template_Soal_Petualangan_Digital.csv";
+      a.download = "Template_Bank_Soal_Buku_3D.csv";
       a.click();
       URL.revokeObjectURL(url);
     });
@@ -1483,29 +3018,47 @@
       reader.onload = (ev) => {
         try {
           const content = ev.target.result;
-          let parsedMap = null;
+          let bank = [];
 
           if (file.name.toLowerCase().endsWith('.json')) {
             const json = JSON.parse(content);
             if (Array.isArray(json)) {
-              parsedMap = { pos1: [], pos2: [], pos3: [], pos4: [] };
-              json.forEach(item => {
-                if (item.id && Array.isArray(item.questions)) {
-                  parsedMap[item.id] = item.questions;
+              json.forEach((item, idx) => {
+                if (item.question && Array.isArray(item.options)) {
+                  bank.push({
+                    id: item.id || `Q${String(idx + 1).padStart(2, '0')}`,
+                    topic: item.topic || item.role || "Bisnis Digital",
+                    question: item.question,
+                    options: item.options,
+                    correctIndex: typeof item.correctIndex === 'number' ? item.correctIndex : 0,
+                    explanation: item.explanation || "Jawaban telah dicatat oleh sistem."
+                  });
+                } else if (Array.isArray(item.questions)) {
+                  item.questions.forEach((q) => {
+                    bank.push({
+                      id: q.id || `Q${String(bank.length + 1).padStart(2, '0')}`,
+                      topic: item.role || q.topic || "Bisnis Digital",
+                      question: q.question,
+                      options: q.options,
+                      correctIndex: typeof q.correctIndex === 'number' ? q.correctIndex : 0,
+                      explanation: q.explanation || "Jawaban telah dicatat oleh sistem."
+                    });
+                  });
                 }
               });
-            } else {
-              parsedMap = json;
             }
           } else {
-            parsedMap = parseUploadedCsv(content);
+            bank = parseUploadedCsvToBank(content);
           }
 
-          localStorage.setItem(STORAGE_KEY_CUSTOM_QUESTIONS, JSON.stringify(parsedMap));
-          applySavedCustomQuestions();
+          if (bank.length === 0) throw new Error("Format soal tidak valid.");
+
+          localStorage.setItem(STORAGE_KEY_CUSTOM_QUESTIONS, JSON.stringify(bank));
+          loadQuestionBankFromStorage();
+          buildDynamicBookGroups();
+          rebuild3DBookEntities();
           refreshSheetStatusBadge();
-          const totalQ = NPC_DATA.reduce((s, n) => s + n.questions.length, 0);
-          showTeacherFeedback(`✅ Berhasil mengunggah ${totalQ} soal dari "${file.name}"!`);
+          showTeacherFeedback(`✅ Berhasil memuat ${bank.length} soal menjadi ${bookGroups.length} Simbol Buku 3D!`);
         } catch (err) {
           showTeacherFeedback(`❌ Gagal memproses file: ${err.message}`, true);
         } finally {
@@ -1517,9 +3070,11 @@
 
     btnResetQuestions.addEventListener('click', () => {
       localStorage.removeItem(STORAGE_KEY_CUSTOM_QUESTIONS);
-      applySavedCustomQuestions();
+      loadQuestionBankFromStorage();
+      buildDynamicBookGroups();
+      rebuild3DBookEntities();
       refreshSheetStatusBadge();
-      showTeacherFeedback("✅ Bank soal dikembalikan ke soal bawaan.");
+      showTeacherFeedback(`✅ Bank soal dikembalikan ke soal bawaan (${activeQuestionBank.length} soal → ${bookGroups.length} Buku).`);
     });
 
     // Start Game Form Submit
@@ -1544,297 +3099,372 @@
 
       sfx.init();
       sfx.playInteract();
+      setTimeout(() => {
+        if (gameState.isPlaying) initClassroomMultiplayer(classVal);
+      }, 1200);
+
       startModal.classList.add('hidden');
       hudOverlay.classList.remove('hidden');
     });
 
-    function updateHUD() {
-      document.getElementById('hud-score').textContent = Math.round(gameState.score);
-      const completedCount = Object.values(gameState.completedPos).filter(p => p.completed).length;
-      document.getElementById('hud-progress').textContent = `${completedCount}/${NPC_DATA.length}`;
+    /**
+     * 10. HUD, PROXIMITY INTERACTION & IBU RIA DIALOG SYSTEM
+     */
+    const hudScore = document.getElementById('hud-score');
+    const hudProgress = document.getElementById('hud-progress');
+    const iburiaModal = document.getElementById('iburia-modal');
+    const iburiaDialogText = document.getElementById('iburia-dialog-text');
+    const iburiaBookCount = document.getElementById('iburia-book-count');
+    const iburiaQuestionCount = document.getElementById('iburia-question-count');
+    const iburiaIncompleteWarning = document.getElementById('iburia-incomplete-warning');
+    const btnIbuRiaClose = document.getElementById('btn-iburia-close');
+    const btnIbuRiaStartQuest = document.getElementById('btn-iburia-start-quest');
+    const btnIbuRiaCollect = document.getElementById('btn-iburia-collect');
+
+    function getTotalAnsweredCount() {
+      let count = 0;
+      bookGroups.forEach((b) => {
+        const rec = gameState.completedBooks[b.id];
+        if (rec && Array.isArray(rec.answers)) {
+          count += rec.answers.length;
+        }
+      });
+      return count;
     }
 
-    // Audio Mute Toggle
-    const btnToggleAudio = document.getElementById('btn-toggle-audio');
-    const iconSoundOn = document.getElementById('icon-sound-on');
-    const iconSoundOff = document.getElementById('icon-sound-off');
+    function getCompletedBooksCount() {
+      return bookGroups.filter((b) => gameState.completedBooks[b.id]?.completed).length;
+    }
 
-    btnToggleAudio.addEventListener('click', () => {
-      const isMuted = sfx.toggleMute();
-      iconSoundOn.classList.toggle('hidden', isMuted);
-      iconSoundOff.classList.toggle('hidden', !isMuted);
+    function updateHUD() {
+      const totalBooks = bookGroups.length;
+      const doneBooks = getCompletedBooksCount();
+      hudScore.textContent = Math.round(gameState.score);
+      hudProgress.textContent = `${doneBooks}/${totalBooks}`;
+
+      const ibuPill = document.getElementById('iburia-status-pill');
+      if (doneBooks >= totalBooks && totalBooks > 0) {
+        gameState.allBooksCompleted = true;
+        hudQuestBanner.innerHTML = "✅ Semua simbol buku selesai! Kembali ke <strong>Ibu Ria</strong> untuk mengumpulkan jawaban.";
+        hudQuestBanner.className = "mt-2.5 bg-emerald-50 border border-emerald-300 rounded-xl px-2.5 py-1.5 text-[11px] font-bold text-emerald-900 leading-snug";
+        if (ibuPill) {
+          ibuPill.textContent = "Siap Mengumpulkan!";
+          ibuPill.className = "inline-block mt-1 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-400/25 text-emerald-300 border border-emerald-400/50";
+        }
+      } else if (gameState.questStartedByIbuRia) {
+        hudQuestBanner.innerHTML = `📘 Jelajahi kampus & selesaikan seluruh simbol buku (${doneBooks}/${totalBooks} Buku).`;
+        hudQuestBanner.className = "mt-2.5 bg-blue-50 border border-blue-200 rounded-xl px-2.5 py-1.5 text-[11px] font-semibold text-blue-900 leading-snug";
+        if (ibuPill) {
+          ibuPill.textContent = "Sedang Bertugas";
+        }
+      } else {
+        hudQuestBanner.innerHTML = "🎯 Temui Ibu Ria di depan Gedung Utama untuk memulai petualangan!";
+      }
+
+      bookEntities.forEach((ent) => {
+        const pill = ent.labelEl.querySelector('.book-status-pill');
+        const isDone = Boolean(gameState.completedBooks[ent.data.id]?.completed);
+        if (pill) {
+          if (isDone) {
+            pill.textContent = "Selesai ✓";
+            pill.className = "book-status-pill inline-block mt-1 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-400/25 text-emerald-300 border border-emerald-400/50";
+          } else {
+            pill.textContent = "Belum Selesai";
+            pill.className = "book-status-pill inline-block mt-1 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/40";
+          }
+        }
+      });
+    }
+
+    function openIbuRiaDialog() {
+      gameState.isModalOpen = true;
+      sfx.playInteract();
+
+      const totalBooks = bookGroups.length;
+      const doneBooks = getCompletedBooksCount();
+      const totalQ = activeQuestionBank.length;
+      const answeredQ = getTotalAnsweredCount();
+
+      iburiaBookCount.textContent = `${doneBooks} / ${totalBooks} Buku`;
+      iburiaQuestionCount.textContent = `${answeredQ} / ${totalQ} Soal`;
+
+      if (doneBooks >= totalBooks && totalBooks > 0) {
+        iburiaDialogText.textContent = `Luar biasa, ${gameState.studentName}! Kamu telah menemukan seluruh simbol buku dan menjawab semua soal dengan tuntas. Klik tombol "Mengumpulkan" di bawah ini untuk menyerahkan jawabanmu kepada Ibu.`;
+        iburiaIncompleteWarning.classList.add('hidden');
+        btnIbuRiaStartQuest.classList.add('hidden');
+        btnIbuRiaCollect.classList.remove('hidden');
+      } else if (!gameState.questStartedByIbuRia) {
+        iburiaDialogText.textContent = `Selamat datang di Petualangan Digital, ${gameState.studentName}! Hari ini kamu akan menjelajahi dunia pembelajaran dan menyelesaikan tantangan yang tersedia. Temukan seluruh simbol buku (${totalBooks} buku), jawab semua soal, kemudian kembali kepada Ibu untuk mengumpulkan jawabanmu.`;
+        iburiaIncompleteWarning.classList.add('hidden');
+        btnIbuRiaStartQuest.classList.remove('hidden');
+        btnIbuRiaCollect.classList.add('hidden');
+      } else {
+        iburiaDialogText.textContent = `Semangat terus, ${gameState.studentName}! Kamu baru menyelesaikan ${doneBooks} dari ${totalBooks} simbol buku. Lanjutkan pencarian simbol buku yang tersisa di sekitar area kampus SMKN 1 Cilegon ya!`;
+        iburiaIncompleteWarning.classList.remove('hidden');
+        btnIbuRiaStartQuest.classList.add('hidden');
+        btnIbuRiaCollect.classList.add('hidden');
+      }
+
+      iburiaModal.classList.remove('hidden');
+    }
+
+    function closeIbuRiaDialog() {
+      iburiaModal.classList.add('hidden');
+      gameState.isModalOpen = false;
+    }
+
+    btnIbuRiaClose.addEventListener('click', closeIbuRiaDialog);
+    btnIbuRiaStartQuest.addEventListener('click', () => {
+      gameState.questStartedByIbuRia = true;
+      updateHUD();
+      closeIbuRiaDialog();
+      sfx.playCorrect();
     });
 
-    // Interact Button Click
-    btnInteract.addEventListener('click', () => {
-      if (gameState.isPlaying && !gameState.isModalOpen && gameState.nearbyNpc) {
-        openQuizForNpc(gameState.nearbyNpc);
-      }
+    btnIbuRiaCollect.addEventListener('click', () => {
+      iburiaModal.classList.add('hidden');
+      openFinalReportModal();
     });
 
     /**
-     * 8. QUIZ MODAL LOGIC
+     * 11. BOOK QUIZ MODAL LOGIC
      */
     const quizModal = document.getElementById('quiz-modal');
     const quizTopicBadge = document.getElementById('quiz-topic-badge');
-    const quizTeacherName = document.getElementById('quiz-teacher-name');
+    const quizBookTitle = document.getElementById('quiz-book-title');
     const quizQCounter = document.getElementById('quiz-q-counter');
+    const quizQuestionOriginId = document.getElementById('quiz-question-origin-id');
+    const quizQuestionTopic = document.getElementById('quiz-question-topic');
     const quizQuestionText = document.getElementById('quiz-question-text');
     const quizOptionsContainer = document.getElementById('quiz-options-container');
     const quizFeedbackBox = document.getElementById('quiz-feedback-box');
     const quizFeedbackTitle = document.getElementById('quiz-feedback-title');
     const quizFeedbackDesc = document.getElementById('quiz-feedback-desc');
+    const btnCloseQuiz = document.getElementById('btn-close-quiz');
     const btnNextQuestion = document.getElementById('btn-next-question');
     const btnNextLabel = document.getElementById('btn-next-label');
-    const btnCloseQuiz = document.getElementById('btn-close-quiz');
 
-    function openQuizForNpc(npcObj) {
-      sfx.playInteract();
+    function openBookQuiz(bookData) {
+      if (!gameState.questStartedByIbuRia) {
+        gameState.questStartedByIbuRia = true;
+      }
+
       gameState.isModalOpen = true;
-      gameState.activeNpcId = npcObj.data.id;
-      gameState.activeQuestionIndex = 0;
-      gameState.hasAnsweredCurrent = false;
+      gameState.activeBookId = bookData.id;
 
-      // Initialize progress tracker for this pos if not exists
-      if (!gameState.completedPos[npcObj.data.id]) {
-        gameState.completedPos[npcObj.data.id] = {
+      if (!gameState.completedBooks[bookData.id]) {
+        gameState.completedBooks[bookData.id] = {
           completed: false,
           correctCount: 0,
           answers: []
         };
-      } else {
-        gameState.completedPos[npcObj.data.id].correctCount = 0;
-        gameState.completedPos[npcObj.data.id].answers = [];
       }
 
-      interactionPrompt.classList.add('hidden');
+      const record = gameState.completedBooks[bookData.id];
+      if (record.completed) {
+        gameState.activeQuestionIndex = 0;
+      } else {
+        gameState.activeQuestionIndex = Math.min(record.answers.length, bookData.questions.length - 1);
+      }
+
+      sfx.playInteract();
+      renderQuizQuestion();
       quizModal.classList.remove('hidden');
-      renderCurrentQuestion();
     }
 
-    function renderCurrentQuestion() {
-      const npc = NPC_DATA.find(n => n.id === gameState.activeNpcId);
-      if (!npc) return;
+    function renderQuizQuestion() {
+      const bookData = bookGroups.find((b) => b.id === gameState.activeBookId);
+      if (!bookData) return;
 
+      const record = gameState.completedBooks[bookData.id];
       const qIdx = gameState.activeQuestionIndex;
-      const qData = npc.questions[qIdx];
-      gameState.hasAnsweredCurrent = false;
+      const qObj = bookData.questions[qIdx];
+      const totalInBook = bookData.questions.length;
 
-      quizTopicBadge.textContent = `POS ${NPC_DATA.indexOf(npc) + 1} • ${npc.locationLabel}`;
-      quizTeacherName.textContent = npc.fullTitle;
-      quizQCounter.textContent = `${qIdx + 1} / ${npc.questions.length}`;
-      quizQuestionText.textContent = qData.question;
+      quizTopicBadge.textContent = `${bookData.title} • ${bookData.locationLabel}`;
+      quizBookTitle.textContent = `${bookData.title} (${bookData.rangeLabel})`;
+      quizQCounter.textContent = `${qIdx + 1} / ${totalInBook}`;
+      quizQuestionOriginId.textContent = `ID Soal: ${qObj.id}`;
+      quizQuestionTopic.textContent = `Materi: ${qObj.topic}`;
+      quizQuestionText.textContent = qObj.question;
 
+      quizOptionsContainer.innerHTML = '';
       quizFeedbackBox.classList.add('hidden');
       btnNextQuestion.classList.add('hidden');
-      quizOptionsContainer.innerHTML = '';
 
-      const letters = ['A', 'B', 'C', 'D'];
-      qData.options.forEach((optText, idx) => {
+      const existingAnswer = record.answers[qIdx];
+      const isAlreadyAnswered = Boolean(existingAnswer);
+      gameState.hasAnsweredCurrent = isAlreadyAnswered;
+
+      const optionLetters = ['A', 'B', 'C', 'D'];
+
+      qObj.options.forEach((optText, optIdx) => {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = "w-full text-left p-3.5 rounded-2xl border-2 border-slate-200 hover:border-blue-500 hover:bg-blue-50/60 transition flex items-start gap-3 cursor-pointer";
+
         btn.innerHTML = `
-          <span class="w-7 h-7 rounded-lg bg-slate-100 text-slate-700 font-extrabold text-xs flex items-center justify-center shrink-0 mt-0.5">${letters[idx]}</span>
-          <span class="text-sm font-medium text-slate-800 leading-snug">${optText}</span>
+          <span class="w-7 h-7 rounded-lg bg-slate-100 text-slate-700 font-extrabold text-xs flex items-center justify-center shrink-0 mt-0.5">${optionLetters[optIdx]}</span>
+          <span class="text-xs sm:text-sm font-semibold text-slate-800 leading-snug">${optText}</span>
         `;
-        btn.addEventListener('click', () => handleSelectAnswer(idx));
+
+        if (isAlreadyAnswered) {
+          btn.disabled = true;
+          btn.classList.remove('hover:border-blue-500', 'hover:bg-blue-50/60', 'cursor-pointer');
+          if (optIdx === qObj.correctIndex) {
+            btn.classList.add('border-emerald-500', 'bg-emerald-50');
+          } else if (optIdx === existingAnswer.selectedIndex && !existingAnswer.isCorrect) {
+            btn.classList.add('border-rose-500', 'bg-rose-50');
+          } else {
+            btn.classList.add('opacity-60');
+          }
+        } else {
+          btn.addEventListener('click', () => handleSelectOption(optIdx));
+        }
+
         quizOptionsContainer.appendChild(btn);
       });
+
+      if (isAlreadyAnswered) {
+        showQuestionFeedback(existingAnswer.isCorrect, qObj.explanation);
+        btnNextLabel.textContent = qIdx + 1 < totalInBook ? "Soal Berikutnya" : "Selesaikan Buku";
+        btnNextQuestion.classList.remove('hidden');
+      }
     }
 
-    function handleSelectAnswer(selectedIndex) {
+    function showQuestionFeedback(isCorrect, explanation) {
+      quizFeedbackBox.classList.remove('hidden', 'bg-emerald-50', 'border-emerald-200', 'bg-rose-50', 'border-rose-200');
+      if (isCorrect) {
+        quizFeedbackBox.classList.add('bg-emerald-50', 'border-emerald-200');
+        quizFeedbackTitle.innerHTML = `<span class="text-emerald-700">✅ Jawaban Tepat! (+${Math.round(getPointsPerQuestion() * 10) / 10} Poin)</span>`;
+      } else {
+        quizFeedbackBox.classList.add('bg-rose-50', 'border-rose-200');
+        quizFeedbackTitle.innerHTML = `<span class="text-rose-700">❌ Jawaban Kurang Tepat</span>`;
+      }
+      quizFeedbackDesc.textContent = explanation;
+    }
+
+    function handleSelectOption(selectedIndex) {
       if (gameState.hasAnsweredCurrent) return;
       gameState.hasAnsweredCurrent = true;
 
-      const npc = NPC_DATA.find(n => n.id === gameState.activeNpcId);
-      const qData = npc.questions[gameState.activeQuestionIndex];
-      const isCorrect = selectedIndex === qData.correctIndex;
+      const bookData = bookGroups.find((b) => b.id === gameState.activeBookId);
+      const record = gameState.completedBooks[bookData.id];
+      const qIdx = gameState.activeQuestionIndex;
+      const qObj = bookData.questions[qIdx];
 
-      // Highlight Option Buttons
-      const optionButtons = quizOptionsContainer.querySelectorAll('button');
-      optionButtons.forEach((btn, idx) => {
-        btn.disabled = true;
-        btn.classList.remove('hover:border-blue-500', 'hover:bg-blue-50/60', 'cursor-pointer');
-        if (idx === qData.correctIndex) {
-          btn.classList.remove('border-slate-200');
-          btn.classList.add('border-emerald-500', 'bg-emerald-50');
-          btn.querySelector('span').classList.add('bg-emerald-600', 'text-white');
-        } else if (idx === selectedIndex && !isCorrect) {
-          btn.classList.remove('border-slate-200');
-          btn.classList.add('border-red-500', 'bg-red-50');
-          btn.querySelector('span').classList.add('bg-red-600', 'text-white');
-        }
-      });
-
-      // Score & Feedback
-      quizFeedbackBox.classList.remove('hidden', 'bg-emerald-50', 'border-emerald-200', 'bg-red-50', 'border-red-200');
-      const letters = ['A', 'B', 'C', 'D'];
-      gameState.completedPos[npc.id].answers.push({
-        soalNo: gameState.activeQuestionIndex + 1,
-        dipilih: `${letters[selectedIndex]}. ${qData.options[selectedIndex]}`,
-        benar: isCorrect
-      });
-
+      const isCorrect = selectedIndex === qObj.correctIndex;
       if (isCorrect) {
+        record.correctCount += 1;
+        gameState.score = Math.min(100, gameState.score + getPointsPerQuestion());
         sfx.playCorrect();
-        gameState.score += getPointsPerQuestion();
-        gameState.completedPos[npc.id].correctCount += 1;
-        updateHUD();
-
-        quizFeedbackBox.classList.add('bg-emerald-50', 'border-emerald-200');
-        quizFeedbackTitle.innerHTML = `<span class="text-emerald-700">✅ Jawaban Tepat! (+${Number(getPointsPerQuestion().toFixed(1))} Poin)</span>`;
       } else {
         sfx.playWrong();
-        quizFeedbackBox.classList.add('bg-red-50', 'border-red-200');
-        quizFeedbackTitle.innerHTML = `<span class="text-red-700">❌ Kurang Tepat</span>`;
       }
 
-      quizFeedbackDesc.textContent = qData.explanation;
-      quizFeedbackBox.classList.remove('hidden');
+      record.answers[qIdx] = {
+        questionId: qObj.id,
+        selectedIndex,
+        isCorrect
+      };
 
-      const isLastQ = gameState.activeQuestionIndex >= npc.questions.length - 1;
-      btnNextLabel.textContent = isLastQ ? "Selesaikan Pos Ini" : "Soal Berikutnya";
-      btnNextQuestion.classList.remove('hidden');
+      if (record.answers.length >= bookData.questions.length) {
+        record.completed = true;
+      }
+
+      updateHUD();
+      renderQuizQuestion();
     }
 
     btnNextQuestion.addEventListener('click', () => {
-      const npc = NPC_DATA.find(n => n.id === gameState.activeNpcId);
-      if (!npc) return;
+      const bookData = bookGroups.find((b) => b.id === gameState.activeBookId);
+      if (!bookData) return;
 
-      if (gameState.activeQuestionIndex < npc.questions.length - 1) {
+      if (gameState.activeQuestionIndex + 1 < bookData.questions.length) {
         gameState.activeQuestionIndex += 1;
-        renderCurrentQuestion();
+        renderQuizQuestion();
       } else {
-        // Mark Pos Completed
-        gameState.completedPos[npc.id].completed = true;
-        markNpcCompletedVisuals(npc.id);
-        updateHUD();
-
         quizModal.classList.add('hidden');
         gameState.isModalOpen = false;
-        gameState.activeNpcId = null;
-
-        // Check if all 4 Pos are completed
-        const totalCompleted = Object.values(gameState.completedPos).filter(p => p.completed).length;
-        if (totalCompleted >= NPC_DATA.length) {
-          showFinalReportModal();
+        updateHUD();
+        if (getCompletedBooksCount() >= bookGroups.length) {
+          sfx.playVictory();
         }
       }
     });
 
-    function markNpcCompletedVisuals(npcId) {
-      const entity = npcEntities.find(e => e.data.id === npcId);
-      if (!entity) return;
+    btnCloseQuiz.addEventListener('click', () => {
+      quizModal.classList.add('hidden');
+      gameState.isModalOpen = false;
+      updateHUD();
+    });
 
-      entity.beacon.material.color.setHex(0x10B981);
-      entity.beacon.material.emissive.setHex(0x059669);
-      entity.ring.material.color.setHex(0x10B981);
-
-      const pill = entity.labelEl.querySelector('.npc-status-pill');
-      if (pill) {
-        pill.textContent = "Selesai ✓";
-        pill.className = "npc-status-pill inline-block mt-1 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/25 text-emerald-300 border border-emerald-400/50";
+    function triggerInteraction(target) {
+      if (!target) return;
+      if (target.type === 'iburia') {
+        openIbuRiaDialog();
+      } else if (target.type === 'book') {
+        openBookQuiz(target.bookData);
       }
     }
 
-    btnCloseQuiz.addEventListener('click', () => {
-      // If user closes mid-way before finishing pos, reset points earned in this unfinished pos
-      const posId = gameState.activeNpcId;
-      if (posId && !gameState.completedPos[posId]?.completed) {
-        const earnedHere = (gameState.completedPos[posId]?.correctCount || 0) * getPointsPerQuestion();
-        gameState.score = Math.max(0, gameState.score - earnedHere);
-        gameState.completedPos[posId].correctCount = 0;
-        gameState.completedPos[posId].answers = [];
-        updateHUD();
+    btnInteract.addEventListener('click', () => {
+      if (gameState.nearbyTarget) {
+        triggerInteraction(gameState.nearbyTarget);
       }
-      quizModal.classList.add('hidden');
-      gameState.isModalOpen = false;
-      gameState.activeNpcId = null;
     });
 
     /**
-     * 9. FINAL REPORT CARD & DIRECT GOOGLE SHEETS SUBMISSION
+     * 12. FINAL REPORT & GOOGLE SHEETS SUBMISSION
      */
     const reportModal = document.getElementById('report-modal');
+    const reportName = document.getElementById('report-name');
+    const reportClass = document.getElementById('report-class');
+    const reportScore = document.getElementById('report-score');
+    const reportPredicate = document.getElementById('report-predicate');
+    const reportBreakdown = document.getElementById('report-breakdown');
     const btnSubmitTeacher = document.getElementById('btn-submit-teacher');
     const btnSubmitLabel = document.getElementById('btn-submit-label');
     const iconSubmitSend = document.getElementById('icon-submit-send');
     const iconSubmitSpinner = document.getElementById('icon-submit-spinner');
     const submitStatusBox = document.getElementById('submit-status-box');
 
-    function getPredicate(score) {
-      if (score >= 85) return { label: "Sangat Kompeten", style: "bg-emerald-100 text-emerald-700" };
-      if (score >= 70) return { label: "Kompeten", style: "bg-blue-100 text-blue-700" };
-      return { label: "Perlu Pengayaan", style: "bg-amber-100 text-amber-700" };
-    }
-
-    function showFinalReportModal() {
-      sfx.playVictory();
+    function openFinalReportModal() {
       gameState.isModalOpen = true;
-      interactionPrompt.classList.add('hidden');
+      sfx.playVictory();
 
       const finalScore = Math.round(gameState.score);
-      const pred = getPredicate(finalScore);
+      reportName.textContent = gameState.studentName;
+      reportClass.textContent = gameState.studentClass;
+      reportScore.textContent = finalScore;
 
-      document.getElementById('report-name').textContent = gameState.studentName;
-      document.getElementById('report-class').textContent = gameState.studentClass;
-      document.getElementById('report-score').textContent = finalScore;
+      if (finalScore >= 85) {
+        reportPredicate.textContent = "Sangat Kompeten";
+        reportPredicate.className = "inline-block text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 mt-0.5";
+      } else if (finalScore >= 70) {
+        reportPredicate.textContent = "Kompeten";
+        reportPredicate.className = "inline-block text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-700 mt-0.5";
+      } else {
+        reportPredicate.textContent = "Perlu Pendalaman";
+        reportPredicate.className = "inline-block text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-700 mt-0.5";
+      }
 
-      const predEl = document.getElementById('report-predicate');
-      predEl.textContent = pred.label;
-      predEl.className = `inline-block text-[11px] font-bold px-2.5 py-0.5 rounded-full mt-0.5 ${pred.style}`;
-
-      const breakdownEl = document.getElementById('report-breakdown');
-      breakdownEl.innerHTML = '';
-
-      NPC_DATA.forEach((npc) => {
-        const res = gameState.completedPos[npc.id] || { correctCount: 0 };
-        const pts = Math.round(res.correctCount * getPointsPerQuestion() * 10) / 10;
+      reportBreakdown.innerHTML = '';
+      bookGroups.forEach((b) => {
+        const rec = gameState.completedBooks[b.id] || { correctCount: 0 };
         const row = document.createElement('div');
-        row.className = "flex items-center justify-between bg-slate-50 border border-slate-200/80 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm";
+        row.className = "flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs";
         row.innerHTML = `
           <div>
-            <span class="font-bold text-slate-800">${npc.role}</span>
-            <span class="block text-[11px] text-slate-500">${npc.name} • Benar ${res.correctCount}/${npc.questions.length} soal</span>
+            <span class="font-extrabold text-slate-800">${b.title}</span>
+            <span class="text-slate-500 ml-1.5">(${b.rangeLabel})</span>
           </div>
-          <span class="font-extrabold text-blue-700">${pts} Poin</span>
+          <span class="font-extrabold text-blue-700">${rec.correctCount} / ${b.questions.length} Benar</span>
         `;
-        breakdownEl.appendChild(row);
+        reportBreakdown.appendChild(row);
       });
 
-      submitStatusBox.classList.add('hidden');
       reportModal.classList.remove('hidden');
-    }
-
-    function buildSubmissionPayload() {
-      const finalScore = Math.round(gameState.score);
-      const ptsPerQ = getPointsPerQuestion();
-      const p1 = Math.round((gameState.completedPos["pos1"]?.correctCount || 0) * ptsPerQ * 10) / 10;
-      const p2 = Math.round((gameState.completedPos["pos2"]?.correctCount || 0) * ptsPerQ * 10) / 10;
-      const p3 = Math.round((gameState.completedPos["pos3"]?.correctCount || 0) * ptsPerQ * 10) / 10;
-      const p4 = Math.round((gameState.completedPos["pos4"]?.correctCount || 0) * ptsPerQ * 10) / 10;
-
-      const detailList = NPC_DATA.map((npc) => {
-        const posData = gameState.completedPos[npc.id] || { correctCount: 0, answers: [] };
-        const ansSummary = (posData.answers || [])
-          .map(a => `S${a.soalNo}:${a.benar ? "Benar" : "Salah"} (${a.dipilih})`)
-          .join("; ");
-        return `[${npc.role}: ${posData.correctCount}/${npc.questions.length} | ${ansSummary}]`;
-      });
-
-      return {
-        timestamp: new Date().toLocaleString("id-ID", { timeZone: "Asia/Jakarta" }),
-        nama: gameState.studentName,
-        kelas: gameState.studentClass,
-        skorTotal: finalScore,
-        pos1_branding: p1,
-        pos2_seo: p2,
-        pos3_pkk: p3,
-        pos4_sosmed: p4,
-        detailJawaban: detailList.join(" "),
-        emailGuru: TEACHER_EMAIL
-      };
     }
 
     btnSubmitTeacher.addEventListener('click', async () => {
@@ -1844,168 +3474,312 @@
       if (!scriptUrl) {
         submitStatusBox.classList.remove('hidden', 'bg-emerald-50', 'border-emerald-200', 'text-emerald-800');
         submitStatusBox.classList.add('bg-amber-50', 'border-amber-200', 'text-amber-800');
-        submitStatusBox.innerHTML = `⚠️ URL Web App Google Apps Script belum diatur oleh guru. Hubungi guru pengampu (<strong>${TEACHER_EMAIL}</strong>) untuk menempelkan link Spreadsheet.`;
+        submitStatusBox.textContent = "⚠️ Link Google Sheet Guru belum dikonfigurasi pada Panel Guru.";
         return;
       }
 
-      // Set Loading State
       btnSubmitTeacher.disabled = true;
       iconSubmitSend.classList.add('hidden');
       iconSubmitSpinner.classList.remove('hidden');
       btnSubmitLabel.textContent = "Mengirim ke Google Sheet...";
-      submitStatusBox.classList.add('hidden');
 
-      const payload = buildSubmissionPayload();
+      const payload = {
+        timestamp: new Date().toISOString(),
+        teacherEmail: TEACHER_EMAIL,
+        studentName: gameState.studentName,
+        studentClass: gameState.studentClass,
+        avatarGender: gameState.avatarGender,
+        finalScore: Math.round(gameState.score),
+        totalQuestions: activeQuestionBank.length,
+        booksSummary: bookGroups.map((b) => ({
+          book: b.title,
+          range: b.rangeLabel,
+          correct: gameState.completedBooks[b.id]?.correctCount || 0,
+          total: b.questions.length
+        }))
+      };
 
       try {
         await fetch(scriptUrl, {
           method: 'POST',
           mode: 'no-cors',
-          headers: {
-            'Content-Type': 'application/json'
-          },
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: JSON.stringify(payload)
         });
 
-        // Lock Button on Success
         gameState.hasSubmittedToTeacher = true;
         iconSubmitSpinner.classList.add('hidden');
-        btnSubmitTeacher.classList.remove('bg-blue-600', 'hover:bg-blue-700', 'disabled:bg-slate-400');
-        btnSubmitTeacher.classList.add('bg-emerald-600', 'disabled:bg-emerald-600', 'text-white');
-        btnSubmitLabel.textContent = "Terkirim ke Guru ✓";
-
-        submitStatusBox.classList.remove('hidden', 'bg-amber-50', 'border-amber-200', 'text-amber-800', 'bg-red-50', 'border-red-200', 'text-red-800');
+        btnSubmitLabel.textContent = "Terkirim ke Ibu Ria ✓";
+        submitStatusBox.classList.remove('hidden', 'bg-amber-50', 'border-amber-200', 'text-amber-800');
         submitStatusBox.classList.add('bg-emerald-50', 'border-emerald-200', 'text-emerald-800');
-        submitStatusBox.innerHTML = `✅ Hasil berhasil dikirim ke Google Sheet Bu Ria (<strong>${TEACHER_EMAIL}</strong>)!`;
+        submitStatusBox.textContent = `✅ Hasil nilai (${Math.round(gameState.score)}/100) berhasil dikirim ke Google Sheet Guru!`;
         sfx.playVictory();
       } catch (err) {
-        // Re-enable Button if Network Failed
         btnSubmitTeacher.disabled = false;
         iconSubmitSpinner.classList.add('hidden');
         iconSubmitSend.classList.remove('hidden');
-        btnSubmitLabel.textContent = "Kirim Hasil ke Guru";
-
-        submitStatusBox.classList.remove('hidden', 'bg-emerald-50', 'border-emerald-200', 'text-emerald-800');
-        submitStatusBox.classList.add('bg-red-50', 'border-red-200', 'text-red-800');
-        submitStatusBox.textContent = "❌ Gagal terhubung ke server Google Sheet. Periksa koneksi internet lalu coba klik kirim lagi.";
-        sfx.playWrong();
+        btnSubmitLabel.textContent = "Coba Kirim Ulang";
+        submitStatusBox.classList.remove('hidden');
+        submitStatusBox.classList.add('bg-rose-50', 'border-rose-200', 'text-rose-800');
+        submitStatusBox.textContent = "❌ Gagal mengirim data. Periksa koneksi internet lalu coba lagi.";
       }
     });
 
+    // Audio Mute Toggle
+    const btnToggleAudio = document.getElementById('btn-toggle-audio');
+    const iconSoundOn = document.getElementById('icon-sound-on');
+    const iconSoundOff = document.getElementById('icon-sound-off');
+    btnToggleAudio.addEventListener('click', () => {
+      const muted = sfx.toggleMute();
+      iconSoundOn.classList.toggle('hidden', muted);
+      iconSoundOff.classList.toggle('hidden', !muted);
+    });
+
     /**
-     * 10. MINI RADAR & 2D PROJECTED NPC LABELS UPDATE
+     * 13. MINI RADAR & WORLD 2D FLOATING LABELS
      */
     const radarCanvas = document.getElementById('radar-canvas');
-    const radarCtx = radarCanvas.getContext('2d');
+    const radarCtx = radarCanvas ? radarCanvas.getContext('2d') : null;
 
-    function drawMiniRadar() {
+    function renderMiniRadar() {
+      if (!radarCtx) return;
       const w = radarCanvas.width;
       const h = radarCanvas.height;
       const cx = w / 2;
       const cy = h / 2;
-      const scale = 1.65;
+      const scale = 1.45;
 
       radarCtx.clearRect(0, 0, w, h);
-
-      // Radar Background
       radarCtx.fillStyle = "#0F172A";
       radarCtx.fillRect(0, 0, w, h);
 
-      // Grid Rings
-      radarCtx.strokeStyle = "rgba(148, 163, 184, 0.2)";
+      // Grid rings
+      radarCtx.strokeStyle = "rgba(148, 163, 184, 0.18)";
       radarCtx.lineWidth = 1;
-      radarCtx.beginPath();
-      radarCtx.arc(cx, cy, 24, 0, Math.PI * 2);
-      radarCtx.stroke();
-      radarCtx.beginPath();
-      radarCtx.arc(cx, cy, 46, 0, Math.PI * 2);
-      radarCtx.stroke();
+      [18, 36, 52].forEach((r) => {
+        radarCtx.beginPath();
+        radarCtx.arc(cx, cy, r, 0, Math.PI * 2);
+        radarCtx.stroke();
+      });
 
-      // NPC Dots relative to player
-      npcEntities.forEach((entity) => {
-        const dx = (entity.data.position.x - player.root.position.x) * scale;
-        const dz = (entity.data.position.z - player.root.position.z) * scale;
+      const px = player.root.position.x;
+      const pz = player.root.position.z;
 
-        // Rotate radar relative to cameraYaw so top of radar is camera forward
+      function toRadarXY(wx, wz) {
+        const dx = (wx - px) * scale;
+        const dz = (wz - pz) * scale;
         const cos = Math.cos(-cameraYaw);
         const sin = Math.sin(-cameraYaw);
-        let rx = dx * cos - dz * sin;
-        let rz = dx * sin + dz * cos;
+        const rx = cx + (dx * cos - dz * sin);
+        const ry = cy - (dx * sin + dz * cos);
+        return {
+          x: Math.max(6, Math.min(w - 6, rx)),
+          y: Math.max(6, Math.min(h - 6, ry))
+        };
+      }
 
-        // Clamp within radar radius
-        const dist = Math.hypot(rx, rz);
-        const maxR = 48;
-        if (dist > maxR) {
-          rx = (rx / dist) * maxR;
-          rz = (rz / dist) * maxR;
-        }
+      // Ibu Ria marker (rose)
+      const ibuPt = toRadarXY(IBU_RIA_CONFIG.position.x, IBU_RIA_CONFIG.position.z);
+      radarCtx.fillStyle = "#FB7185";
+      radarCtx.beginPath();
+      radarCtx.arc(ibuPt.x, ibuPt.y, 4.2, 0, Math.PI * 2);
+      radarCtx.fill();
 
-        const isDone = gameState.completedPos[entity.data.id]?.completed;
-        radarCtx.fillStyle = isDone ? "#34D399" : "#FBBF24";
+      // Book Symbols (amber if active, emerald if done)
+      bookEntities.forEach((ent) => {
+        const bPt = toRadarXY(ent.data.position.x, ent.data.position.z);
+        const done = Boolean(gameState.completedBooks[ent.data.id]?.completed);
+        radarCtx.fillStyle = done ? "#34D399" : "#FBBF24";
         radarCtx.beginPath();
-        radarCtx.arc(cx + rx, cy + rz, 4.5, 0, Math.PI * 2);
+        radarCtx.arc(bPt.x, bPt.y, 3.5, 0, Math.PI * 2);
         radarCtx.fill();
       });
 
-      // Player Center Triangle
+      // Classroom Peers (violet)
+      remotePlayers.forEach((entry) => {
+        const rPt = toRadarXY(entry.charObj.root.position.x, entry.charObj.root.position.z);
+        radarCtx.fillStyle = "#A78BFA";
+        radarCtx.beginPath();
+        radarCtx.arc(rPt.x, rPt.y, 3.2, 0, Math.PI * 2);
+        radarCtx.fill();
+      });
+
+      // Local Player Center Arrow
       radarCtx.fillStyle = "#38BDF8";
       radarCtx.beginPath();
-      radarCtx.moveTo(cx, cy - 6);
-      radarCtx.lineTo(cx - 4.5, cy + 5);
-      radarCtx.lineTo(cx + 4.5, cy + 5);
-      radarCtx.closePath();
+      radarCtx.arc(cx, cy, 4, 0, Math.PI * 2);
       radarCtx.fill();
     }
 
-    const tempVec = new THREE.Vector3();
-    function updateNpcScreenLabels(time) {
-      npcEntities.forEach((entity, idx) => {
-        // Animate Beacon Float & Spin
-        entity.beacon.rotation.y = time * 2.2 + idx;
-        entity.beacon.position.y = 2.85 + Math.sin(time * 3 + idx) * 0.12;
+    function updateWorldFloatingLabels() {
+      const ibuScreen = projectToScreen(new BABYLON.Vector3(IBU_RIA_CONFIG.position.x, 2.65, IBU_RIA_CONFIG.position.z));
+      const ibuDist = Math.hypot(player.root.position.x - IBU_RIA_CONFIG.position.x, player.root.position.z - IBU_RIA_CONFIG.position.z);
+      if (ibuScreen.visible && ibuDist < 42) {
+        ibuRiaLabelEl.style.opacity = "1";
+        ibuRiaLabelEl.style.transform = `translate(${ibuScreen.x}px, ${ibuScreen.y}px) translate(-50%, -100%)`;
+      } else {
+        ibuRiaLabelEl.style.opacity = "0";
+      }
 
-        // Subtle Idle Breathing on NPC
-        entity.charObj.headGroup.position.y = 1.98 + Math.sin(time * 2.5 + idx) * 0.02;
-
-        // Project 3D position above beacon to 2D screen
-        tempVec.set(entity.data.position.x, 3.3, entity.data.position.z);
-        tempVec.project(camera);
-
-        // Check if behind camera or far away
-        const distToPlayer = player.root.position.distanceTo(entity.charObj.root.position);
-        if (tempVec.z > 1 || distToPlayer > 36) {
-          entity.labelEl.style.opacity = "0";
+      bookEntities.forEach((ent) => {
+        const bPos = new BABYLON.Vector3(ent.data.position.x, 2.35, ent.data.position.z);
+        const scr = projectToScreen(bPos);
+        const dist = Math.hypot(player.root.position.x - ent.data.position.x, player.root.position.z - ent.data.position.z);
+        if (scr.visible && dist < 38) {
+          ent.labelEl.style.opacity = "1";
+          ent.labelEl.style.transform = `translate(${scr.x}px, ${scr.y}px) translate(-50%, -100%)`;
         } else {
-          const x = (tempVec.x * 0.5 + 0.5) * window.innerWidth;
-          const y = (-(tempVec.y * 0.5) + 0.5) * window.innerHeight;
-          entity.labelEl.style.transform = `translate(-50%, -100%) translate(${x}px, ${y}px)`;
-          entity.labelEl.style.opacity = "1";
+          ent.labelEl.style.opacity = "0";
+        }
+      });
+
+      remotePlayers.forEach((entry) => {
+        const pPos = new BABYLON.Vector3(entry.charObj.root.position.x, 2.55, entry.charObj.root.position.z);
+        const scr = projectToScreen(pPos);
+        if (scr.visible) {
+          entry.labelEl.style.opacity = "1";
+          entry.labelEl.style.transform = `translate(${scr.x}px, ${scr.y}px) translate(-50%, -100%)`;
+        } else {
+          entry.labelEl.style.opacity = "0";
         }
       });
     }
 
     /**
-     * 11. MAIN ANIMATION & GAME LOOP
+     * 14. MAIN BABYLON.JS RENDER & GAME LOOP
      */
-    const clock = new THREE.Clock();
+    let elapsedTime = 0;
+    let walkPhase = 0;
+    let currentSpeed = 0;
+    let verticalVel = 0;
+    let jumpOffset = 0;
+    let isGrounded = true;
 
-    function animate() {
-      requestAnimationFrame(animate);
+    function triggerPlayerJump() {
+      if (!gameState.isPlaying || gameState.isModalOpen || !isGrounded) return;
+      isGrounded = false;
+      verticalVel = 7.4;
+      sfx.playTone(340, 'sine', 0.14, 0.08, 0);
+    }
 
-      const dt = Math.min(clock.getDelta(), 0.05);
-      const elapsedTime = clock.getElapsedTime();
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Space') {
+        triggerPlayerJump();
+      }
+    });
 
-      // Movement Input Vector
+    const btnTouchJump = document.getElementById('btn-touch-jump');
+    if (btnTouchJump) {
+      btnTouchJump.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        triggerPlayerJump();
+      }, { passive: false });
+      btnTouchJump.addEventListener('click', triggerPlayerJump);
+    }
+
+    function projectToScreen(vec3) {
+      const engineWidth = engine.getRenderWidth();
+      const engineHeight = engine.getRenderHeight();
+      const viewport = camera.viewport.toGlobal(engineWidth, engineHeight);
+      const projected = BABYLON.Vector3.Project(
+        vec3,
+        BABYLON.Matrix.Identity(),
+        scene.getTransformMatrix(),
+        viewport
+      );
+      const dpr = engine.getHardwareScalingLevel();
+      return {
+        x: projected.x * dpr,
+        y: projected.y * dpr,
+        visible: projected.z >= 0 && projected.z <= 1
+      };
+    }
+
+    scene.onBeforeRenderObservable.add(() => {
+      const dt = Math.min(engine.getDeltaTime() / 1000, 0.05);
+      elapsedTime += dt;
+
+      // Subtle atmospheric cloud drift
+      skyDome.rotation.y += dt * 0.004;
+
+      // Gentle Wind Sway on Campus Grass Tufts
+      for (let g = 0; g < grassBlades.length; g++) {
+        const gb = grassBlades[g];
+        gb.node.rotation.z = Math.sin(elapsedTime * gb.speed + gb.phase) * 0.08;
+        gb.node.rotation.x = Math.cos(elapsedTime * gb.speed * 0.8 + gb.phase) * 0.05;
+      }
+
+      // Animate Ibu Ria Idle & Beacon
+      ibuRiaBeacon.rotation.y += dt * 2.2;
+      ibuRiaBeacon.position.y = 2.95 + Math.sin(elapsedTime * 3.2) * 0.12;
+      ibuRiaChar.root.position.y = 0.04 + Math.sin(elapsedTime * 2.1) * 0.012;
+      ibuRiaChar.leftArmPivot.rotation.z = 0.06 + Math.sin(elapsedTime * 1.9) * 0.02;
+      ibuRiaChar.rightArmPivot.rotation.z = -0.06 - Math.sin(elapsedTime * 1.9) * 0.02;
+
+      // Animate Floating 3D Open Book Symbols
+      bookEntities.forEach((ent, idx) => {
+        ent.booksHolder.rotation.y += dt * 1.15;
+        ent.booksHolder.position.y = 1.48 + Math.sin(elapsedTime * 2.6 + idx) * 0.14;
+      });
+
+      // Interpolate Remote Classroom Players & Clean Stale Peers
+      const nowMs = Date.now();
+      remotePlayers.forEach((entry, peerId) => {
+        if (nowMs - entry.lastSeen > 12000) {
+          removeRemotePeer(peerId);
+          return;
+        }
+        const prevX = entry.charObj.root.position.x;
+        const prevZ = entry.charObj.root.position.z;
+        entry.charObj.root.position = BABYLON.Vector3.Lerp(entry.charObj.root.position, entry.targetPos, Math.min(1, dt * 10));
+
+        let diff = entry.targetRotY - entry.charObj.root.rotation.y;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        entry.charObj.root.rotation.y += diff * Math.min(1, dt * 10);
+
+        const stepDist = Math.hypot(entry.charObj.root.position.x - prevX, entry.charObj.root.position.z - prevZ);
+        if (entry.isMoving || stepDist > 0.008) {
+          const swing = Math.sin(elapsedTime * 11) * 0.55;
+          entry.charObj.leftLegPivot.rotation.x = swing;
+          entry.charObj.rightLegPivot.rotation.x = -swing;
+          entry.charObj.leftKneePivot.rotation.x = Math.max(0, -swing) * 0.85;
+          entry.charObj.rightKneePivot.rotation.x = Math.max(0, swing) * 0.85;
+          entry.charObj.leftArmPivot.rotation.x = -swing * 0.75;
+          entry.charObj.rightArmPivot.rotation.x = swing * 0.75;
+          entry.charObj.leftElbowPivot.rotation.x = -0.25 - Math.max(0, swing) * 0.55;
+          entry.charObj.rightElbowPivot.rotation.x = -0.25 - Math.max(0, -swing) * 0.55;
+        } else {
+          entry.charObj.leftLegPivot.rotation.x *= 0.8;
+          entry.charObj.rightLegPivot.rotation.x *= 0.8;
+          entry.charObj.leftKneePivot.rotation.x *= 0.8;
+          entry.charObj.rightKneePivot.rotation.x *= 0.8;
+          entry.charObj.leftArmPivot.rotation.x *= 0.8;
+          entry.charObj.rightArmPivot.rotation.x *= 0.8;
+          entry.charObj.leftElbowPivot.rotation.x = BABYLON.Scalar.Lerp(entry.charObj.leftElbowPivot.rotation.x, -0.22, 0.2);
+          entry.charObj.rightElbowPivot.rotation.x = BABYLON.Scalar.Lerp(entry.charObj.rightElbowPivot.rotation.x, -0.22, 0.2);
+        }
+      });
+
+      if (!gameState.isPlaying) {
+        const angle = elapsedTime * 0.16;
+        camera.position.set(Math.sin(angle) * 26, 13, Math.cos(angle) * 26);
+        camera.setTarget(new BABYLON.Vector3(0, 2, -3));
+        return;
+      }
+
+      // Player Movement with Smooth Acceleration & Deceleration
       let moveForward = 0;
       let moveRight = 0;
+      let isMoving = false;
+      const maxSpeed = 8.4;
 
-      if (gameState.isPlaying && !gameState.isModalOpen) {
+      if (!gameState.isModalOpen) {
         if (keys.w || keys.ArrowUp) moveForward += 1;
         if (keys.s || keys.ArrowDown) moveForward -= 1;
         if (keys.d || keys.ArrowRight) moveRight += 1;
         if (keys.a || keys.ArrowLeft) moveRight -= 1;
 
-        // Combine with touch joystick
         if (Math.abs(touchMove.x) > 0.08 || Math.abs(touchMove.z) > 0.08) {
           moveRight += touchMove.x;
           moveForward -= touchMove.z;
@@ -2014,113 +3788,159 @@
 
       const inputLen = Math.hypot(moveForward, moveRight);
       if (inputLen > 0.01) {
-        const normF = moveForward / Math.max(1, inputLen);
-        const normR = moveRight / Math.max(1, inputLen);
+        isMoving = true;
+        moveForward /= inputLen;
+        moveRight /= inputLen;
+        currentSpeed = BABYLON.Scalar.Lerp(currentSpeed, maxSpeed, Math.min(1, dt * 11));
 
-        // Convert camera-relative input into world X/Z velocity
-        const forwardX = -Math.sin(cameraYaw);
-        const forwardZ = -Math.cos(cameraYaw);
-        const rightX = Math.cos(cameraYaw);
-        const rightZ = -Math.sin(cameraYaw);
+        const forwardVec = new BABYLON.Vector3(Math.sin(cameraYaw), 0, Math.cos(cameraYaw));
+        const rightVec = new BABYLON.Vector3(Math.cos(cameraYaw), 0, -Math.sin(cameraYaw));
 
-        const vx = (forwardX * normF + rightX * normR);
-        const vz = (forwardZ * normF + rightZ * normR);
+        const moveDir = forwardVec.scale(moveForward).add(rightVec.scale(moveRight)).normalize();
+        const nextX = player.root.position.x + moveDir.x * currentSpeed * dt;
+        const nextZ = player.root.position.z + moveDir.z * currentSpeed * dt;
 
-        const speed = 8.2;
-        const nextX = player.root.position.x + vx * speed * dt;
-        const nextZ = player.root.position.z + vz * speed * dt;
+        if (!checkCollision(nextX, player.root.position.z)) player.root.position.x = nextX;
+        if (!checkCollision(player.root.position.x, nextZ)) player.root.position.z = nextZ;
 
-        // Slide along walls cleanly
-        if (!checkCollision(nextX, player.root.position.z)) {
-          player.root.position.x = nextX;
+        const targetRotY = Math.atan2(moveDir.x, moveDir.z);
+        let rotDiff = targetRotY - player.root.rotation.y;
+        while (rotDiff > Math.PI) rotDiff -= Math.PI * 2;
+        while (rotDiff < -Math.PI) rotDiff += Math.PI * 2;
+        player.root.rotation.y += rotDiff * Math.min(1, dt * 14);
+
+        // Subtle athletic lean into turns
+        player.root.rotation.z = BABYLON.Scalar.Lerp(player.root.rotation.z, -rotDiff * 0.14, Math.min(1, dt * 10));
+      } else {
+        currentSpeed = BABYLON.Scalar.Lerp(currentSpeed, 0, Math.min(1, dt * 14));
+        player.root.rotation.z = BABYLON.Scalar.Lerp(player.root.rotation.z, 0, Math.min(1, dt * 10));
+      }
+
+      // Jump Physics
+      if (!isGrounded) {
+        verticalVel -= 20.5 * dt;
+        jumpOffset += verticalVel * dt;
+        if (jumpOffset <= 0) {
+          jumpOffset = 0;
+          verticalVel = 0;
+          isGrounded = true;
         }
-        if (!checkCollision(player.root.position.x, nextZ)) {
-          player.root.position.z = nextZ;
-        }
+      }
 
-        // Smoothly rotate avatar toward movement direction
-        const targetAngle = Math.atan2(vx, vz);
-        let angleDiff = targetAngle - player.root.rotation.y;
-        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-        player.root.rotation.y += angleDiff * Math.min(1, dt * 14);
-
-        // Procedural Walking Limb Animation
-        const swing = Math.sin(elapsedTime * 12) * 0.65;
+      // Organic Joint Animation (Jump, Walk/Run Cycle, or Idle)
+      if (!isGrounded) {
+        player.leftLegPivot.rotation.x = 0.35;
+        player.rightLegPivot.rotation.x = -0.25;
+        player.leftKneePivot.rotation.x = 0.55;
+        player.rightKneePivot.rotation.x = 0.35;
+        player.leftArmPivot.rotation.x = -0.55;
+        player.rightArmPivot.rotation.x = -0.55;
+        player.root.position.y = 0.04 + jumpOffset;
+      } else if (isMoving) {
+        const speedRatio = Math.min(1, currentSpeed / maxSpeed);
+        walkPhase += dt * (7.5 + 4.5 * speedRatio);
+        const swing = Math.sin(walkPhase) * (0.60 * speedRatio);
         player.leftLegPivot.rotation.x = swing;
         player.rightLegPivot.rotation.x = -swing;
-        player.leftArmPivot.rotation.x = -swing * 0.85;
-        player.rightArmPivot.rotation.x = swing * 0.85;
-        player.root.position.y = 0.12 + Math.abs(Math.sin(elapsedTime * 12)) * 0.07;
+        player.leftKneePivot.rotation.x = Math.max(0, -swing) * 0.85;
+        player.rightKneePivot.rotation.x = Math.max(0, swing) * 0.85;
+        player.leftArmPivot.rotation.x = -swing * 0.80;
+        player.rightArmPivot.rotation.x = swing * 0.80;
+        player.leftElbowPivot.rotation.x = -0.25 - Math.max(0, swing) * 0.55;
+        player.rightElbowPivot.rotation.x = -0.25 - Math.max(0, -swing) * 0.55;
+        player.headGroup.rotation.y = Math.sin(walkPhase * 0.5) * 0.05;
+        player.root.position.y = 0.04 + Math.abs(Math.sin(walkPhase)) * (0.045 * speedRatio);
       } else {
-        // Smooth Return to Idle Pose
+        walkPhase = 0;
         player.leftLegPivot.rotation.x *= 0.8;
         player.rightLegPivot.rotation.x *= 0.8;
+        player.leftKneePivot.rotation.x *= 0.8;
+        player.rightKneePivot.rotation.x *= 0.8;
         player.leftArmPivot.rotation.x *= 0.8;
         player.rightArmPivot.rotation.x *= 0.8;
-        player.root.position.y = 0.12;
-        player.headGroup.position.y = 1.98 + Math.sin(elapsedTime * 3) * 0.02;
+        player.leftElbowPivot.rotation.x = BABYLON.Scalar.Lerp(player.leftElbowPivot.rotation.x, -0.22, 0.2);
+        player.rightElbowPivot.rotation.x = BABYLON.Scalar.Lerp(player.rightElbowPivot.rotation.x, -0.22, 0.2);
+        player.headGroup.rotation.y *= 0.85;
+        player.root.position.y = 0.04 + Math.sin(elapsedTime * 2.2) * 0.012;
       }
 
-      // Third-Person Smooth Camera Follow
-      const camDist = 8.5;
-      const camHeight = 3.2 + Math.sin(cameraPitch) * 4.5;
-      const horizDist = camDist * Math.cos(cameraPitch);
+      broadcastMyState(isMoving);
 
-      const desiredCamX = player.root.position.x + Math.sin(cameraYaw) * horizDist;
-      const desiredCamZ = player.root.position.z + Math.cos(cameraYaw) * horizDist;
-      const desiredCamY = player.root.position.y + camHeight;
+      // Smooth Third-Person Follow Camera (Decoupled from micro step bounce)
+      const camDist = 7.4;
+      const stableBaseY = 0.04 + jumpOffset;
+      const desiredCamX = player.root.position.x - Math.sin(cameraYaw) * Math.cos(cameraPitch) * camDist;
+      const desiredCamZ = player.root.position.z - Math.cos(cameraYaw) * Math.cos(cameraPitch) * camDist;
+      const desiredCamY = stableBaseY + 2.3 + Math.sin(cameraPitch) * camDist;
 
-      camera.position.lerp(new THREE.Vector3(desiredCamX, desiredCamY, desiredCamZ), Math.min(1, dt * 10));
-      camera.lookAt(
-        player.root.position.x,
-        player.root.position.y + 1.55,
-        player.root.position.z
+      camera.position = BABYLON.Vector3.Lerp(
+        camera.position,
+        new BABYLON.Vector3(desiredCamX, desiredCamY, desiredCamZ),
+        Math.min(1, dt * 12)
       );
+      camera.setTarget(new BABYLON.Vector3(
+        player.root.position.x,
+        stableBaseY + 1.55,
+        player.root.position.z
+      ));
 
-      // Check Proximity to Nearest Active NPC Teacher
-      if (gameState.isPlaying && !gameState.isModalOpen) {
-        let closestNpc = null;
-        let minDist = 3.6;
+      // Proximity Detection (Ibu Ria + Active Book Symbols)
+      let closestTarget = null;
+      let minDist = 3.6;
 
-        npcEntities.forEach((entity) => {
-          if (gameState.completedPos[entity.data.id]?.completed) return;
-          const dist = player.root.position.distanceTo(entity.charObj.root.position);
-          if (dist < minDist) {
-            minDist = dist;
-            closestNpc = entity;
-          }
-        });
+      const distToIbuRia = Math.hypot(
+        player.root.position.x - IBU_RIA_CONFIG.position.x,
+        player.root.position.z - IBU_RIA_CONFIG.position.z
+      );
+      if (distToIbuRia < minDist) {
+        minDist = distToIbuRia;
+        closestTarget = {
+          type: 'iburia',
+          promptLabel: getCompletedBooksCount() >= bookGroups.length
+            ? "Kumpulkan Jawaban ke Ibu Ria"
+            : "Bicara dengan Ibu Ria"
+        };
+      }
 
-        gameState.nearbyNpc = closestNpc;
-        if (closestNpc) {
-          interactionText.textContent = `Bicara dengan ${closestNpc.data.name} (${closestNpc.data.role})`;
-          interactionPrompt.classList.remove('hidden');
-        } else {
-          interactionPrompt.classList.add('hidden');
+      bookEntities.forEach((ent) => {
+        const d = Math.hypot(
+          player.root.position.x - ent.data.position.x,
+          player.root.position.z - ent.data.position.z
+        );
+        if (d < minDist) {
+          minDist = d;
+          const isDone = Boolean(gameState.completedBooks[ent.data.id]?.completed);
+          closestTarget = {
+            type: 'book',
+            bookData: ent.data,
+            promptLabel: isDone
+              ? `Lihat Kembali ${ent.data.title}`
+              : `Buka ${ent.data.title} (${ent.data.rangeLabel})`
+          };
         }
+      });
+
+      gameState.nearbyTarget = closestTarget;
+      if (closestTarget && !gameState.isModalOpen) {
+        interactionText.textContent = closestTarget.promptLabel;
+        interactionPrompt.classList.remove('hidden');
+      } else {
+        interactionPrompt.classList.add('hidden');
       }
 
-      // Update UI Overlays
-      updateNpcScreenLabels(elapsedTime);
-      if (gameState.isPlaying) {
-        drawMiniRadar();
-      }
-
-      renderer.render(scene, camera);
-    }
-
-    // Handle Responsive Window Resize
-    window.addEventListener('resize', () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
+      updateWorldFloatingLabels();
+      renderMiniRadar();
     });
 
-    // Start Engine Loop on Window Load
-    window.onload = function () {
-      animate();
-    };
+    // Apply initial Ultra quality & run render loop
+    applyGraphicsQuality("ULTRA");
+    engine.runRenderLoop(() => {
+      scene.render();
+    });
+
+    window.addEventListener('resize', () => {
+      engine.resize();
+    });
   </script>
 </body>
 </html>
