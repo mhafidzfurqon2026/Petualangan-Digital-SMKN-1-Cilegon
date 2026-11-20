@@ -1,0 +1,4102 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Petualangan Digital: SMKN 1 Cilegon</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Babylon.js Engine -->
+  <script src="https://cdn.babylonjs.com/babylon.js"></script>
+  <!-- PeerJS for Serverless P2P Classroom Multiplayer -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <!-- Google Fonts: Inter -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    * {
+      font-family: 'Inter', sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+      box-sizing: border-box;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #D9DDE2;
+      touch-action: none;
+    }
+    #game-canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      outline: none;
+    }
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #F1F5F9;
+      border-radius: 8px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #94A3B8;
+      border-radius: 8px;
+    }
+    @keyframes pulseGlow {
+      0%, 100% { transform: translate(-50%, 0) scale(1); }
+      50% { transform: translate(-50%, -4px) scale(1.03); }
+    }
+    .animate-prompt {
+      animation: pulseGlow 1.6s infinite ease-in-out;
+    }
+  </style>
+</head>
+<body class="relative w-full h-full overflow-hidden">
+
+  <!-- 3D Babylon.js Canvas -->
+  <canvas id="game-canvas"></canvas>
+
+  <!-- Floating 2D Screen Labels Container (Ibu Ria, Book Symbols & Multiplayer Peers) -->
+  <div id="world-labels-layer" class="pointer-events-none fixed inset-0 overflow-hidden z-10"></div>
+
+  <!-- =========================================================
+       HUD OVERLAY (DITAMPILKAN SAAT EKSPLORASI)
+  ========================================================== -->
+  <div id="hud-overlay" class="hidden fixed inset-0 pointer-events-none z-20 p-3 sm:p-5 flex flex-col justify-between">
+    
+    <!-- Top Bar: Student Info & Score (Left) + Radar & Sound (Right) -->
+    <div class="flex items-start justify-between gap-3">
+      <!-- Top-Left Card -->
+      <div class="pointer-events-auto bg-white/95 backdrop-blur-md border border-slate-200/80 shadow-lg rounded-2xl p-3 sm:p-4 max-w-[270px] sm:max-w-xs">
+        <div class="flex items-center justify-between gap-2 mb-2">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <div class="w-9 h-9 rounded-xl bg-blue-900 text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-sm">
+              SMK
+            </div>
+            <div class="min-w-0">
+              <h2 id="hud-student-name" class="text-slate-900 font-bold text-sm sm:text-base truncate">Nama Siswa</h2>
+              <p id="hud-student-class" class="text-xs font-medium text-blue-600 truncate">Kelas XI BD 1</p>
+            </div>
+          </div>
+          <!-- Multiplayer Class Status Pill -->
+          <div id="hud-mp-badge" class="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-1 rounded-lg text-[10px] font-bold shrink-0" title="Teman sekelas online">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span id="hud-mp-count">1 Online</span>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
+          <div class="bg-slate-50 rounded-xl px-2.5 py-1.5 border border-slate-200/60">
+            <span class="block text-[10px] uppercase tracking-wider font-semibold text-slate-400">Skor</span>
+            <span id="hud-score" class="text-base sm:text-lg font-extrabold text-blue-700">0</span>
+            <span class="text-[11px] font-medium text-slate-400">/100</span>
+          </div>
+          <div class="bg-slate-50 rounded-xl px-2.5 py-1.5 border border-slate-200/60">
+            <span class="block text-[10px] uppercase tracking-wider font-semibold text-slate-400">Simbol Buku</span>
+            <span id="hud-progress" class="text-base sm:text-lg font-extrabold text-emerald-600">0/0</span>
+          </div>
+        </div>
+        <!-- Quest Objective Banner -->
+        <div id="hud-quest-banner" class="mt-2.5 bg-amber-50 border border-amber-200/90 rounded-xl px-2.5 py-1.5 text-[11px] font-semibold text-amber-900 leading-snug">
+          🎯 Temui Ibu Ria di depan Gedung Utama untuk memulai petualangan!
+        </div>
+      </div>
+
+      <!-- Top-Right Radar & Audio Toggle -->
+      <div class="flex flex-col items-end gap-2">
+        <div class="flex items-center gap-2">
+          <!-- Controls Hint Badge (Desktop) -->
+          <div class="hidden md:flex items-center gap-2 bg-slate-900/85 backdrop-blur-md text-white text-xs px-3.5 py-2 rounded-xl border border-slate-700/70 shadow-md">
+            <span class="px-1.5 py-0.5 bg-slate-700 rounded text-[11px] font-bold">WASD / Panah</span> Gerak
+            <span class="text-slate-500">•</span>
+            <span class="px-1.5 py-0.5 bg-slate-700 rounded text-[11px] font-bold">Drag Mouse</span> Kamera
+            <span class="text-slate-500">•</span>
+            <span class="px-1.5 py-0.5 bg-blue-600 rounded text-[11px] font-bold">E</span> Interaksi
+          </div>
+
+          <!-- Mute / Unmute Button -->
+          <button id="btn-toggle-audio" title="Suara Efek" class="pointer-events-auto w-10 h-10 rounded-xl bg-white/95 hover:bg-slate-100 text-slate-800 border border-slate-200 shadow-lg flex items-center justify-center transition active:scale-95">
+            <svg id="icon-sound-on" class="w-5 h-5 text-blue-700" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M11 5L6 9H2v6h4l5 4V5zM15.54 8.46a5 5 0 010 7.07M19.07 4.93a10 10 0 010 14.14" />
+            </svg>
+            <svg id="icon-sound-off" class="hidden w-5 h-5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M11 5L6 9H2v6h4l5 4V5zM23 9l-6 6M17 9l6 6" />
+            </svg>
+          </button>
+
+          <!-- Scalable Graphics Quality Selector -->
+          <button id="btn-cycle-quality" title="Kualitas Grafis 3D" class="pointer-events-auto h-10 px-3 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-amber-300 border border-slate-700 shadow-lg flex items-center gap-1.5 text-xs font-extrabold tracking-wide transition active:scale-95 cursor-pointer">
+            <span>✨</span>
+            <span id="label-graphics-quality">ULTRA</span>
+          </button>
+        </div>
+
+        <!-- Mini Radar -->
+        <div class="pointer-events-auto bg-slate-900/90 backdrop-blur-md p-2 rounded-2xl border border-slate-700/80 shadow-xl">
+          <canvas id="radar-canvas" width="116" height="116" class="rounded-xl block"></canvas>
+          <div class="flex items-center justify-between text-[10px] text-slate-300 mt-1.5 px-1 font-medium">
+            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-rose-400 inline-block"></span>Bu Ria</span>
+            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-amber-400 inline-block"></span>Buku</span>
+            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-violet-400 inline-block"></span>Teman</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Center-Bottom Proximity Interaction Prompt -->
+    <div id="interaction-prompt" class="hidden fixed bottom-28 sm:bottom-12 left-1/2 -translate-x-1/2 z-30 pointer-events-auto animate-prompt">
+      <button id="btn-interact" class="flex items-center gap-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold px-5 py-3.5 rounded-2xl shadow-2xl border-2 border-white/90 transition cursor-pointer">
+        <span class="w-7 h-7 rounded-lg bg-white text-blue-700 font-extrabold text-sm flex items-center justify-center shadow-sm">E</span>
+        <span id="interaction-text" class="text-sm sm:text-base whitespace-nowrap">Bicara dengan Ibu Ria</span>
+      </button>
+    </div>
+
+    <!-- Bottom Controls for Touch / Mobile Devices -->
+    <div class="flex items-end justify-between w-full sm:hidden pb-1">
+      <div id="touch-joystick-zone" class="pointer-events-auto relative w-28 h-28 rounded-full bg-slate-900/45 backdrop-blur-sm border-2 border-white/30 flex items-center justify-center">
+        <div id="touch-joystick-knob" class="w-11 h-11 rounded-full bg-white/90 shadow-lg border-2 border-blue-600 pointer-events-none transition-transform duration-75"></div>
+      </div>
+      <div class="flex flex-col items-end gap-2">
+        <button id="btn-touch-jump" type="button" class="pointer-events-auto w-14 h-14 rounded-full bg-blue-600/90 active:bg-blue-700 text-white font-extrabold text-xs border-2 border-white/80 shadow-xl flex items-center justify-center">
+          LOMPAT
+        </button>
+        <div class="bg-slate-900/65 text-white/90 text-[11px] px-3 py-1.5 rounded-xl backdrop-blur-sm border border-white/15">
+          Geser layar putar kamera
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       1. START SCREEN OVERLAY
+  ========================================================== -->
+  <div id="start-modal" class="fixed inset-0 z-40 bg-slate-900/75 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-md w-full overflow-hidden">
+      <!-- Header Banner -->
+      <div class="bg-gradient-to-br from-slate-900 via-blue-900 to-blue-700 p-6 sm:p-7 text-white relative overflow-hidden">
+        <div class="flex items-center justify-between gap-2 mb-3">
+          <div class="inline-flex items-center gap-2 bg-white/15 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-semibold tracking-wide border border-white/20">
+            <span>🎓</span> GAME 3D PEMBELAJARAN • MAPEL IBU RIA
+          </div>
+          <!-- Teacher Protected Panel Trigger -->
+          <button
+            type="button"
+            id="btn-open-sheet-setup"
+            title="Panel Khusus Guru (Dilindungi PIN)"
+            class="inline-flex items-center gap-1.5 bg-white/15 hover:bg-white/25 text-white text-[11px] font-semibold px-2.5 py-1 rounded-full border border-white/25 transition cursor-pointer shrink-0"
+          >
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+            <span id="sheet-status-badge">Panel Guru</span>
+          </button>
+        </div>
+        <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight leading-tight">
+          Petualangan Digital:<br/>
+          <span class="text-amber-300">SMKN 1 Cilegon</span>
+        </h1>
+        <p class="text-blue-100 text-xs sm:text-sm mt-2 leading-relaxed">
+          Jelajahi kampus bersama teman sekelas, temui Ibu Ria, selesaikan seluruh simbol buku tantangan, lalu serahkan hasilmu!
+        </p>
+      </div>
+
+      <!-- Teacher PIN Gate & Protected Setup Panel -->
+      <div id="sheet-setup-panel" class="hidden bg-slate-50 px-6 py-5 space-y-4 max-h-[65vh] overflow-y-auto">
+        <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+          <button
+            type="button"
+            id="btn-back-to-start"
+            class="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-blue-700 bg-white hover:bg-blue-50 px-3 py-1.5 rounded-xl border border-slate-200 transition cursor-pointer"
+          >
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+            <span>Kembali ke Menu Awal</span>
+          </button>
+          <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Panel Guru</span>
+        </div>
+
+        <!-- Step 1: PIN Verification Box -->
+        <div id="teacher-pin-gate" class="space-y-2.5">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+              🔒 Akses Khusus Guru Pengampu
+            </span>
+            <span class="text-[10px] font-semibold text-slate-500">PIN Default: 1945</span>
+          </div>
+          <p class="text-[11px] text-slate-500 leading-relaxed">
+            Masukkan PIN Guru untuk mengatur URL Google Sheet dan mengunggah bank soal kuis:
+          </p>
+          <div class="flex gap-2">
+            <input
+              type="password"
+              id="input-teacher-pin"
+              maxlength="12"
+              placeholder="Masukkan PIN Guru..."
+              class="flex-1 px-3 py-2 rounded-xl border border-slate-300 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
+            />
+            <button
+              type="button"
+              id="btn-verify-pin"
+              class="bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold px-4 py-2 rounded-xl transition cursor-pointer shrink-0"
+            >
+              Buka Kunci
+            </button>
+          </div>
+          <p id="pin-error-msg" class="hidden text-[11px] font-semibold text-red-600">
+            ❌ PIN salah. Hanya guru yang dapat membuka pengaturan ini.
+          </p>
+        </div>
+
+        <!-- Step 2: Unlocked Teacher Controls -->
+        <div id="teacher-unlocked-controls" class="hidden space-y-4">
+          <div class="flex items-center justify-between border-b border-slate-200 pb-2">
+            <span class="text-xs font-extrabold text-emerald-700">🔓 Mode Guru Aktif</span>
+            <button type="button" id="btn-lock-teacher" class="text-[11px] font-semibold text-slate-500 hover:text-slate-800 underline cursor-pointer">
+              Kunci Kembali
+            </button>
+          </div>
+
+          <!-- A. Google Sheet URL -->
+          <div class="space-y-1.5">
+            <div class="flex items-center justify-between">
+              <label class="text-xs font-bold text-slate-800">1. Link Google Sheet Guru</label>
+              <span class="text-[10px] font-medium text-blue-700">riazikryah71.@guru.smk.belajar.id</span>
+            </div>
+            <div class="flex gap-2">
+              <input
+                type="url"
+                id="input-sheet-url"
+                placeholder="https://script.google.com/macros/s/.../exec"
+                class="flex-1 px-3 py-2 rounded-xl border border-slate-300 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
+              />
+              <button
+                type="button"
+                id="btn-save-sheet-url"
+                class="bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition cursor-pointer shrink-0"
+              >
+                Simpan
+              </button>
+            </div>
+          </div>
+
+          <!-- B. Upload Soal (CSV / JSON) -->
+          <div class="space-y-2 pt-2 border-t border-slate-200">
+            <div class="flex items-center justify-between">
+              <label class="text-xs font-bold text-slate-800">2. Upload Bank Soal (CSV / JSON)</label>
+              <button type="button" id="btn-download-template" class="text-[11px] font-bold text-blue-600 hover:text-blue-800 underline cursor-pointer">
+                ⬇ Unduh Template CSV
+              </button>
+            </div>
+            <p class="text-[11px] text-slate-500 leading-relaxed">
+              Unggah file <strong>.csv</strong> atau <strong>.json</strong>. Sistem otomatis membagi setiap 10 soal menjadi 1 Simbol Buku 3D:
+            </p>
+            <div class="flex items-center gap-2">
+              <input
+                type="file"
+                id="input-upload-questions"
+                accept=".csv,.json"
+                class="block w-full text-xs text-slate-600 file:mr-2.5 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
+              />
+              <button type="button" id="btn-reset-questions" title="Kembalikan soal bawaan" class="text-[11px] font-semibold text-slate-500 hover:text-red-600 px-2 py-1.5 rounded-lg border border-slate-200 bg-white shrink-0 cursor-pointer">
+                Reset
+              </button>
+            </div>
+            <div id="question-bank-status" class="text-[11px] font-medium text-slate-600 bg-white px-3 py-2 rounded-xl border border-slate-200">
+              Bank Soal Aktif: <strong>Permanen PKK Kelas XI (20 Soal → 2 Simbol Buku)</strong>
+            </div>
+          </div>
+
+          <!-- C. Change Teacher PIN -->
+          <div class="space-y-1.5 pt-2 border-t border-slate-200">
+            <label class="text-xs font-bold text-slate-800">3. Ubah PIN Guru</label>
+            <div class="flex gap-2">
+              <input
+                type="text"
+                id="input-new-pin"
+                maxlength="12"
+                placeholder="PIN baru (misal: 2026)"
+                class="flex-1 px-3 py-1.5 rounded-xl border border-slate-300 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
+              />
+              <button type="button" id="btn-save-new-pin" class="bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold px-3 py-1.5 rounded-xl cursor-pointer">
+                Ganti PIN
+              </button>
+            </div>
+          </div>
+
+          <p id="sheet-setup-feedback" class="hidden text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2"></p>
+        </div>
+
+        <div class="pt-2 border-t border-slate-200">
+          <button
+            type="button"
+            id="btn-back-to-start-bottom"
+            class="w-full bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs py-2.5 px-4 rounded-xl border border-slate-300 transition flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            <span>Kembali ke Menu Awal</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Form Input Siswa -->
+      <form id="start-form" class="p-6 sm:p-7 space-y-4">
+        <div>
+          <label for="input-name" class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+            Nama Lengkap Siswa
+          </label>
+          <input
+            type="text"
+            id="input-name"
+            required
+            maxlength="32"
+            placeholder="Contoh: Ahmad Fauzan"
+            class="w-full px-4 py-3 rounded-xl border border-slate-300 text-slate-900 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition"
+          />
+        </div>
+
+        <div>
+          <label for="input-class" class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+            Kelas / Room Multiplayer
+          </label>
+          <input
+            type="text"
+            id="input-class"
+            required
+            maxlength="20"
+            placeholder="Contoh: XI BD 1"
+            class="w-full px-4 py-3 rounded-xl border border-slate-300 text-slate-900 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition"
+          />
+          <p class="text-[11px] text-slate-500 mt-1">Siswa dengan nama kelas yang sama otomatis terhubung dalam satu dunia 3D.</p>
+        </div>
+
+        <!-- Pilihan Avatar Pria & Wanita Berhijab -->
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+            Pilih Karakter Avatar
+          </label>
+          <div class="grid grid-cols-2 gap-3">
+            <label class="cursor-pointer">
+              <input type="radio" name="avatar-gender" value="male" checked class="peer sr-only" />
+              <div class="p-3 rounded-2xl border-2 border-slate-200 peer-checked:border-blue-600 peer-checked:bg-blue-50/70 transition flex items-center gap-2.5">
+                <div class="w-9 h-9 rounded-xl bg-blue-100 text-blue-800 flex items-center justify-center text-lg shrink-0">
+                  👦
+                </div>
+                <div>
+                  <span class="block text-xs font-extrabold text-slate-800">Siswa Pria</span>
+                  <span class="block text-[10px] text-slate-500">Seragam SMK</span>
+                </div>
+              </div>
+            </label>
+
+            <label class="cursor-pointer">
+              <input type="radio" name="avatar-gender" value="female" class="peer sr-only" />
+              <div class="p-3 rounded-2xl border-2 border-slate-200 peer-checked:border-blue-600 peer-checked:bg-blue-50/70 transition flex items-center gap-2.5">
+                <div class="w-9 h-9 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center text-lg shrink-0">
+                  🧕
+                </div>
+                <div>
+                  <span class="block text-xs font-extrabold text-slate-800">Siswi Wanita</span>
+                  <span class="block text-[10px] text-slate-500">Berhijab SMK</span>
+                </div>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <div id="start-error" class="hidden text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-xl px-3.5 py-2.5">
+          Mohon isi Nama Lengkap dan Kelas terlebih dahulu.
+        </div>
+
+        <button
+          type="submit"
+          class="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold py-3.5 px-6 rounded-xl shadow-lg shadow-blue-600/25 transition flex items-center justify-center gap-2 text-sm sm:text-base cursor-pointer"
+        >
+          <span>Mulai Petualangan</span>
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+          </svg>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       2. IBU RIA DIALOG MODAL (PEMBUKAAN, STATUS & PENGUMPULAN)
+  ========================================================== -->
+  <div id="iburia-modal" class="hidden fixed inset-0 z-40 bg-slate-900/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full overflow-hidden flex flex-col">
+      <!-- Header -->
+      <div class="bg-gradient-to-r from-amber-800 via-amber-700 to-amber-600 px-6 py-4 text-white flex items-center gap-3">
+        <div class="w-11 h-11 rounded-2xl bg-white/20 border border-white/30 flex items-center justify-center text-2xl shrink-0">
+          🧕
+        </div>
+        <div>
+          <span class="inline-block text-[10px] font-bold uppercase tracking-wider bg-white/20 px-2 py-0.5 rounded-md mb-0.5">
+            Guru Pembimbing • Mapel Ibu Ria
+          </span>
+          <h3 class="text-lg font-extrabold leading-tight">Ibu Ria</h3>
+        </div>
+      </div>
+
+      <!-- Dialog Content -->
+      <div class="p-6 space-y-4">
+        <div class="bg-amber-50/80 border border-amber-200/80 rounded-2xl p-4 text-slate-800 text-sm leading-relaxed">
+          <p id="iburia-dialog-text" class="font-medium">
+            Selamat datang di Petualangan Digital! Hari ini kamu akan menjelajahi dunia pembelajaran dan menyelesaikan tantangan yang tersedia. Temukan seluruh simbol buku, jawab semua soal, kemudian kembali kepada Ibu untuk mengumpulkan jawabanmu.
+          </p>
+        </div>
+
+        <!-- Progress Summary Inside Ibu Ria Dialog -->
+        <div id="iburia-progress-box" class="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 space-y-2 text-xs">
+          <div class="flex items-center justify-between font-bold text-slate-700">
+            <span>Status Penyelesaian Simbol Buku:</span>
+            <span id="iburia-book-count" class="text-blue-700">0 / 0 Buku</span>
+          </div>
+          <div class="flex items-center justify-between font-bold text-slate-700">
+            <span>Total Soal Terjawab:</span>
+            <span id="iburia-question-count" class="text-emerald-700">0 / 0 Soal</span>
+          </div>
+          <div id="iburia-incomplete-warning" class="hidden pt-1.5 border-t border-slate-200 text-amber-800 font-semibold">
+            ⚠️ Selesaikan seluruh soal pada semua simbol buku terlebih dahulu sebelum mengumpulkan jawaban.
+          </div>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-3">
+        <button id="btn-iburia-close" type="button" class="text-xs sm:text-sm font-bold text-slate-600 hover:text-slate-900 px-4 py-2.5 rounded-xl border border-slate-300 bg-white transition cursor-pointer">
+          Tutup
+        </button>
+        <button id="btn-iburia-start-quest" type="button" class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm px-5 py-2.5 rounded-xl shadow-md transition flex items-center gap-2 cursor-pointer">
+          <span>Mulai Jelajahi Simbol Buku</span>
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+          </svg>
+        </button>
+        <button id="btn-iburia-collect" type="button" class="hidden bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm px-5 py-2.5 rounded-xl shadow-md shadow-emerald-600/25 transition flex items-center gap-2 cursor-pointer">
+          <span>Mengumpulkan</span>
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       3. QUIZ MODAL (INTERAKSI DENGAN SIMBOL BUKU 3D)
+  ========================================================== -->
+  <div id="quiz-modal" class="hidden fixed inset-0 z-40 bg-slate-900/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full overflow-hidden flex flex-col max-h-[92vh]">
+      
+      <!-- Royal Blue Header -->
+      <div class="bg-gradient-to-r from-blue-900 to-blue-600 px-6 py-4 text-white flex items-center justify-between">
+        <div>
+          <span id="quiz-topic-badge" class="inline-block text-[11px] font-bold uppercase tracking-wider bg-white/20 px-2.5 py-0.5 rounded-md mb-1">
+            Simbol Buku 1
+          </span>
+          <h3 id="quiz-book-title" class="text-lg font-extrabold leading-snug">Buku 1 (Soal 1–10)</h3>
+        </div>
+        <div class="text-right shrink-0 ml-3">
+          <span class="block text-[11px] text-blue-200 font-medium">Pertanyaan</span>
+          <span id="quiz-q-counter" class="text-base font-extrabold bg-slate-900/40 px-3 py-1 rounded-xl inline-block mt-0.5">1 / 10</span>
+        </div>
+      </div>
+
+      <!-- Quiz Body -->
+      <div class="p-6 overflow-y-auto space-y-4">
+        <div class="flex items-center justify-between text-[11px] font-semibold text-slate-500">
+          <span id="quiz-question-origin-id">ID Soal: #1</span>
+          <span id="quiz-question-topic">Materi: Mapel Ibu Ria</span>
+        </div>
+
+        <p id="quiz-question-text" class="text-slate-800 font-semibold text-base leading-relaxed whitespace-pre-line">
+          Pertanyaan akan muncul di sini...
+        </p>
+
+        <!-- Options List -->
+        <div id="quiz-options-container" class="space-y-2.5"></div>
+
+        <!-- Immediate Educational Feedback Box -->
+        <div id="quiz-feedback-box" class="hidden rounded-2xl p-4 border text-sm leading-relaxed">
+          <div class="flex items-center gap-2 font-bold mb-1" id="quiz-feedback-title"></div>
+          <p id="quiz-feedback-desc" class="text-slate-700 text-xs sm:text-sm"></p>
+        </div>
+      </div>
+
+      <!-- Footer Actions -->
+      <div class="px-6 py-4 bg-slate-50 border-t border-slate-200/80 flex items-center justify-between gap-3">
+        <button id="btn-close-quiz" type="button" class="text-xs sm:text-sm font-semibold text-slate-500 hover:text-slate-800 px-3 py-2 rounded-xl transition cursor-pointer">
+          Tutup Sementara
+        </button>
+        <button id="btn-next-question" type="button" class="hidden bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm px-5 py-2.5 rounded-xl shadow-md transition flex items-center gap-1.5 cursor-pointer">
+          <span id="btn-next-label">Soal Berikutnya</span>
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       4. COMPLETION / REPORT CARD MODAL (SETELAH MENGUMPULKAN KE IBU RIA)
+  ========================================================== -->
+  <div id="report-modal" class="hidden fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full overflow-hidden flex flex-col max-h-[92vh]">
+      
+      <!-- Executive Header -->
+      <div class="bg-gradient-to-br from-slate-900 via-blue-900 to-blue-700 p-6 text-white text-center relative">
+        <div class="w-14 h-14 mx-auto bg-amber-400 text-slate-900 rounded-2xl flex items-center justify-center text-2xl font-extrabold shadow-lg mb-3">
+          🏆
+        </div>
+        <h2 class="text-xl sm:text-2xl font-extrabold tracking-tight">Laporan Hasil Petualangan</h2>
+        <p class="text-blue-200 text-xs sm:text-sm mt-1">SMKN 1 Cilegon • Diserahkan kepada Ibu Ria</p>
+      </div>
+
+      <!-- Report Body -->
+      <div class="p-6 overflow-y-auto space-y-4">
+        <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex items-center justify-between gap-4">
+          <div>
+            <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Peserta Didik</p>
+            <p id="report-name" class="text-base font-extrabold text-slate-900">Nama Siswa</p>
+            <p id="report-class" class="text-xs font-semibold text-blue-600">Kelas XI BD 1</p>
+          </div>
+          <div class="text-right">
+            <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Nilai Akhir</p>
+            <p id="report-score" class="text-3xl font-black text-blue-700">100</p>
+            <span id="report-predicate" class="inline-block text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 mt-0.5">
+              Sangat Kompeten
+            </span>
+          </div>
+        </div>
+
+        <!-- Breakdown per Simbol Buku -->
+        <div>
+          <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Rincian Capaian per Simbol Buku</h4>
+          <div id="report-breakdown" class="space-y-2"></div>
+        </div>
+
+        <!-- Submission Status Banner -->
+        <div id="submit-status-box" class="hidden rounded-xl px-4 py-3 text-xs font-semibold text-center border"></div>
+      </div>
+
+      <!-- Single Primary Action Button -->
+      <div class="p-5 bg-slate-50 border-t border-slate-200 flex flex-col items-center gap-2.5">
+        <button id="btn-submit-teacher" type="button" class="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:bg-slate-400 disabled:cursor-not-allowed text-white font-bold text-sm sm:text-base py-3.5 px-5 rounded-xl shadow-lg shadow-blue-600/25 transition flex items-center justify-center gap-2.5 cursor-pointer">
+          <svg id="icon-submit-send" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+          </svg>
+          <svg id="icon-submit-spinner" class="hidden w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+          </svg>
+          <span id="btn-submit-label">Kirim Hasil ke Guru</span>
+        </button>
+        <p class="text-[11px] font-medium text-slate-500 text-center">
+          Tujuan: Google Sheet Guru (<span class="font-semibold text-slate-700">riazikryah71.@guru.smk.belajar.id</span>)
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       JAVASCRIPT: BABYLON.JS ENGINE, ANATOMICAL CHARACTERS,
+       P2P CLASSROOM MULTIPLAYER, DYNAMIC BOOKS & QUIZ
+  ========================================================== -->
+  <script>
+    /**
+     * 0. KONFIGURASI GOOGLE SHEETS, PIN GURU & BANK SOAL DINAMIS
+     */
+    const TEACHER_EMAIL = "riazikryah71.@guru.smk.belajar.id";
+    const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzUH8S0_IbvKVOp7CprhWREPo0d6V6MXYmJ-0r8eV8gr3VbYbdFjwv3A2nRYI4MdhfNsQ/exec";
+    const DEFAULT_TEACHER_PIN = "1945";
+
+    const STORAGE_KEY_SHEET_URL = "smkn1cilegon_guru_sheet_url";
+    const STORAGE_KEY_TEACHER_PIN = "smkn1cilegon_guru_pin";
+    const STORAGE_KEY_CUSTOM_QUESTIONS = "smkn1cilegon_custom_questions";
+
+    function getTeacherPin() {
+      return localStorage.getItem(STORAGE_KEY_TEACHER_PIN) || DEFAULT_TEACHER_PIN;
+    }
+
+    function resolveGoogleScriptUrl() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const paramUrl = urlParams.get("sheet");
+      if (paramUrl && paramUrl.startsWith("https://")) {
+        localStorage.setItem(STORAGE_KEY_SHEET_URL, paramUrl.trim());
+        return paramUrl.trim();
+      }
+      const savedUrl = localStorage.getItem(STORAGE_KEY_SHEET_URL);
+      if (savedUrl && savedUrl.startsWith("https://")) {
+        return savedUrl.trim();
+      }
+      if (GOOGLE_SCRIPT_URL && GOOGLE_SCRIPT_URL.startsWith("https://")) {
+        return GOOGLE_SCRIPT_URL.trim();
+      }
+      return "";
+    }
+
+    /**
+     * 1. BANK SOAL & PEMBAGIAN DINAMIS PER 10 SOAL -> SIMBOL BUKU 3D
+     */
+    const DEFAULT_QUESTION_BANK = [
+      {
+        id: "Q01",
+        topic: "Merek dan Branding",
+        question: "Fungsi utama dari pendaftaran Merek (Brand/Trademark) bagi sebuah produk wirausaha adalah...",
+        options: [
+          "Menjelaskan cara pembuatan teknis dari produk",
+          "Sebagai tanda pembeda yang mengidentifikasi asal-usul barang/jasa serta membangun citra dan reputasi usaha di mata konsumen",
+          "Menentukan masa kedaluwarsa bahan baku makanan",
+          "Menghitung jumlah beban pajak bulanan perusahaan",
+          "Menjamin kualitas barang tidak akan pernah rusak"
+        ],
+        correctIndex: 1,
+        explanation: "Jawaban B: Sebagai tanda pembeda yang mengidentifikasi asal-usul barang/jasa serta membangun citra dan reputasi usaha di mata konsumen"
+      },
+      {
+        id: "Q02",
+        topic: "Etika Bisnis",
+        question: "Bentuk penerapan prinsip kejujuran dan keterbukaan informasi (consumer rights) dalam etika berwirausaha adalah...",
+        options: [
+          "Menyembunyikan cacat kecil pada barang agar cepat laku",
+          "Mencantumkan informasi komposisi bahan, tanggal kedaluwarsa, dan efek samping produk dengan jujur pada label",
+          "Mengklaim produk berbahan herbal 100% padahal dicampur bahan kimia berbahaya",
+          "Memalsukan stiker sertifikasi halal demi menarik minat pembeli",
+          "Memberikan timbangan isi produk yang lebih rendah dari yang tertera pada kemasan"
+        ],
+        correctIndex: 1,
+        explanation: "Jawaban B: Mencantumkan informasi komposisi bahan, tanggal kedaluwarsa, dan efek samping produk dengan jujur pada label"
+      },
+      {
+        id: "Q03",
+        topic: "Paten",
+        question: "Perbedaan mendasar antara Paten Biasa dan Paten Sederhana (Utility Model) dalam ranah karya inovasi teknologi terapan SMK adalah...",
+        options: [
+          "Paten biasa untuk karya seni, paten sederhana untuk karya tulis",
+          "Paten biasa membutuhkan kebaruan dan langkah inventif tinggi dengan klaim alat kompleks, sedangkan paten sederhana diberikan pada pengembangan/perbaikan alat atau produk berwujud yang memiliki kegunaan praktis langsung",
+          "Paten sederhana berlaku selama 50 tahun, sedangkan paten biasa hanya 2 tahun",
+          "Paten sederhana tidak memerlukan pendaftaran resmi ke DJKI",
+          "Paten biasa khusus dibuat oleh siswa SMK, paten sederhana oleh perguruan tinggi"
+        ],
+        correctIndex: 1,
+        explanation: "Jawaban B: Paten biasa membutuhkan kebaruan dan langkah inventif tinggi dengan klaim alat kompleks, sedangkan paten sederhana diberikan pada pengembangan/perbaikan alat atau produk berwujud yang memiliki kegunaan praktis langsung"
+      },
+      {
+        id: "Q04",
+        topic: "Hak Cipta dan HAKI",
+        question: "Siswa jurusan RPL SMK berhasil merancang sebuah aplikasi perangkat lunak (software) sistem manajemen inventaris toko yang orisinal. Jenis perlindungan HAKI yang paling tepat dan secara eksplisit menaungi karya perangkat lunak/program komputer di Indonesia adalah...",
+        options: [
+          "Hak Paten Industri",
+          "Desain Industri",
+          "Hak Cipta",
+          "Rahasia Dagang",
+          "Desain Tata Letak Sirkuit Terpadu"
+        ],
+        correctIndex: 2,
+        explanation: "Jawaban C: Hak Cipta"
+      },
+      {
+        id: "Q05",
+        topic: "Validasi Ide",
+        question: "Hasil uji coba validasi sampel produk tas kriya dari bahan daur ulang kain perca kepada 100 responden menghasilkan data sebagai berikut:\n    - 80% menyukai desain estetika dan konsep ramah lingkungan.\n    - 75% mengeluhkan daya tahan jahitan tali tas yang mudah terlepas saat diisi beban berat.\n    - 60% menganggap harga Rp150.000 terlalu mahal jika kualitas jahitannya belum kuat.\nAnalisis keputusan perbaikan yang wajib diambil sebelum dipasarkan secara massal adalah...",
+        options: [
+          "Langsung menjual produk ke pasar tanpa mengubah apa pun karena 80% responden menyukai desainnya",
+          "Memperbaiki konstruksi dan kekuatan jahitan tali tas, serta me-review ulang efisiensi produksi agar harga lebih kompetitif",
+          "Menghentikan total proyek pembuatan tas kriya daur ulang",
+          "Menaikkan harga tas menjadi Rp200.000 untuk menutupi biaya riset",
+          "Mengganti bahan kain daur ulang dengan plastik sekali pakai"
+        ],
+        correctIndex: 1,
+        explanation: "Jawaban B: Memperbaiki konstruksi dan kekuatan jahitan tali tas, serta me-review ulang efisiensi produksi agar harga lebih kompetitif"
+      },
+      {
+        id: "Q06",
+        topic: "Design Thinking",
+        question: "Tim pengembang produk SMK ingin merancang instrumen wawancara empati untuk mengetahui kendala lansia saat menggunakan smartphone. Pertanyaan wawancara yang paling efektif dan bernalar empathize adalah...",
+        options: [
+          "\"Apakah Anda tahu cara memprogram ulang firmware smartphone ini?\"",
+          "\"Bisakah Anda ceritakan pengalaman atau kesulitan yang paling sering Anda alami saat mencoba membaca pesan di layar smartphone?\"",
+          "\"Mengapa Anda tidak membeli smartphone mahal saja yang layarnya lebih lebar?\"",
+          "\"Apakah Anda setuju kalau smartphone modern itu sangat rumit?\"",
+          "\"Berapa merk smartphone yang sudah Anda beli tahun ini?\""
+        ],
+        correctIndex: 1,
+        explanation: "Jawaban B: \"Bisakah Anda ceritakan pengalaman atau kesulitan yang paling sering Anda alami saat mencoba membaca pesan di layar smartphone?\""
+      },
+      {
+        id: "Q07",
+        topic: "Peluang Usaha",
+        question: "Sebuah wilayah kawasan industri baru dibangun di dekat lingkungan SMK. Kawasan tersebut menampung sekitar 5.000 pekerja pabrik yang beroperasi dalam 3 sif kerja. Sebagian besar pekerja adalah perantau yang tinggal di rumah kontrakan sekitar kawasan.Berdasarkan analisis tren kebutuhan pekerja tersebut, peluang usaha di bidang jasa yang paling potensial dikembangkan adalah...",
+        options: [
+          "Jasa pembuatan dokumen hukum dan perizinan PT besar",
+          "Jasa laundry ekspres 24 jam dan katering makanan sehat siap saji",
+          "Jasa dekorasi pernikahan mewah (wedding organizer)",
+          "Jasa penjualan suku cadang mesin pabrik berskala berat",
+          "Jasa penyewaan peralatan alat berat konstruksi"
+        ],
+        correctIndex: 1,
+        explanation: "Jawaban B: Jasa laundry ekspres 24 jam dan katering makanan sehat siap saji"
+      },
+      {
+        id: "Q08",
+        topic: "Hak Cipta dan HAKI",
+        question: "Sebuah akun bisnis komersial di media sosial menggunakan lagu ciptaan musisi terkenal sebagai musik latar (backsound) video iklan produk mereka tanpa izin dan tanpa membayar lisensi. Tindakan bisnis tersebut dapat dikategorikan sebagai...",
+        options: [
+          "Tindakan kreatif yang saling menguntungkan",
+          "Pelanggaran Hak Cipta (copyright infringement) karena menggunakan karya cipta orang lain untuk kepentingan komersial tanpa izin",
+          "Penerapan prinsip fair use dalam promosi digital",
+          "Inovasi strategi pemasaran modern yang bebas aturan",
+          "Tindakan pencurian merek dagang musisi"
+        ],
+        correctIndex: 1,
+        explanation: "Jawaban B: Pelanggaran Hak Cipta (copyright infringement) karena menggunakan karya cipta orang lain untuk kepentingan komersial tanpa izin"
+      },
+      {
+        id: "Q09",
+        topic: "Peluang Usaha",
+        question: "Peluang usaha yang baik dan potensial pada dasarnya lahir dari...",
+        options: [
+          "Keinginan wirausahawan untuk meniru bisnis orang lain yang sedang viral tanpa perubahan",
+          "Adanya masalah, kebutuhan, atau perubahan yang terjadi di lingkungan masyarakat yang belum terpenuhi secara optimal",
+          "Spekulasi modal besar tanpa melakukan riset pasar terlebih dahulu",
+          "Anjuran pemerintah yang sifatnya mengikat seluruh warga negara",
+          "Tingginya harga pasaran suatu produk impor di toko ritel"
+        ],
+        correctIndex: 1,
+        explanation: "Jawaban B: Adanya masalah, kebutuhan, atau perubahan yang terjadi di lingkungan masyarakat yang belum terpenuhi secara optimal"
+      },
+      {
+        id: "Q10",
+        topic: "Merek dan Branding",
+        question: "Seorang siswa hendak mendaftarkan nama merek untuk produk kripik pisangnya dengan nama \"Keripik Pisang Enak Lezat\". Petugas Direktorat Jenderal Kekayaan Intelektual (DJKI) kemungkinan besar akan menolak pendaftaran nama merek tersebut.\nAlasan mendasar penolakan merek tersebut sesuai aturan HAKI adalah...",
+        options: [
+          "Nama merek terlalu singkat dan mudah diingat",
+          "Merek menggunakan bahasa Indonesia yang baik dan benar",
+          "Merek bersifat deskriptif umum dan menggunakan kata yang menjelaskan jenis barang/sifat barang itu sendiri",
+          "Pemilik usaha masih berstatus siswa SMK",
+          "Produk kripik pisang dilarang diberi merek dagang"
+        ],
+        correctIndex: 2,
+        explanation: "Jawaban C: Merek bersifat deskriptif umum dan menggunakan kata yang menjelaskan jenis barang/sifat barang itu sendiri"
+      },
+      {
+        id: "Q11",
+        topic: "Paten",
+        question: "Tim SMK Pertanian menemukan dan mematenkan sebuah alat Pakan Ternak Otomatis Berbasis Sensor Berat. Satu tahun kemudian, sebuah perusahaan manufaktur besar memproduksi dan menjual alat yang mekanisme dan klaim teknisnya persis sama dengan paten SMK tersebut tanpa izin lisensi.\nLangkah hukum dan analisis yang paling tepat atas pelanggaran Paten tersebut adalah...",
+        options: [
+          "Membiarkan saja karena perusahaan manufaktur lebih besar dan kuat",
+          "SMK dapat mengajukan gugatan ganti rugi dan penghentian produksi ke Pengadilan Niaga karena perusahaan melakukan pelanggaran hak eksklusif atas Paten terdaftar",
+          "Membatalkan paten SMK dan menyerahkannya kepada perusahaan",
+          "Menjual alat SMK dengan harga yang jauh lebih mahal dari perusahaan",
+          "Mengubah fungsi alat menjadi penyiram tanaman agar tidak berbenturan"
+        ],
+        correctIndex: 1,
+        explanation: "Jawaban B: SMK dapat mengajukan gugatan ganti rugi dan penghentian produksi ke Pengadilan Niaga karena perusahaan melakukan pelanggaran hak eksklusif atas Paten terdaftar"
+      },
+      {
+        id: "Q12",
+        topic: "Kreativitas dan Inovasi",
+        question: "Sebuah bengkel pemeliharaan mekanis SMK ingin meningkatkan efisiensi pendaftaran pelanggan dan reservasi tempat agar tidak timbul antrean panjang. Langkah penerapan inovasi berbasis teknologi digital yang paling sesuai adalah...",
+        options: [
+          "Menambah kursi tunggu yang lebih nyaman di area bengkel",
+          "Membuat aplikasi pemesanan jadwal (booking service) berbasis web/smartphone untuk pelanggan",
+          "Membagikan brosur cetak di perempatan jalan sekitar bengkel",
+          "Mewajibkan pelanggan datang 2 jam lebih awal dari jam operasional",
+          "Mengganti semua mekanik dengan sistem otomatis robotik sepenuhnya"
+        ],
+        correctIndex: 1,
+        explanation: "Jawaban B: Membuat aplikasi pemesanan jadwal (booking service) berbasis web/smartphone untuk pelanggan"
+      },
+      {
+        id: "Q13",
+        topic: "Hak Cipta dan HAKI",
+        question: "Desainer promosi tim SMK menggunakan potongan gambar/foto dari internet untuk poster produk usaha sekolah. Ia mengambil foto tersebut secara utuh dari situs berbayar, menghapus tanda air (watermark), dan menjual produknya dalam skala besar. Ketika ditegur, ia beralasan menerapkan fair use untuk pendidikan.\nAnalisis yang tepat atas kasus tuduhan pelanggaran hak cipta di atas adalah...",
+        options: [
+          "Tindakan desainer dapat dibenarkan karena ia adalah siswa SMK yang sedang belajar",
+          "Pembelaan fair use tidak berlaku karena karya dipublikasikan dan dimanfaatkan untuk kegiatan komersial yang mencari keuntungan finansial serta merugikan pemilik ciptaan",
+          "Semua foto di internet sifatnya bebas digunakan oleh siapa saja tanpa batasan",
+          "Menghapus watermark adalah tindakan sah selama poster didesain ulang sedikit",
+          "Pemilik foto asli seharusnya berterima kasih karena fotonya menjadi terkenal"
+        ],
+        correctIndex: 1,
+        explanation: "Jawaban B: Pembelaan fair use tidak berlaku karena karya dipublikasikan dan dimanfaatkan untuk kegiatan komersial yang mencari keuntungan finansial serta merugikan pemilik ciptaan"
+      },
+      {
+        id: "Q14",
+        topic: "Etika Bisnis",
+        question: "Sebuah wirausaha kuliner lokal yang sedang populer ketahuan menggunakan bahan pengawet buatan berbahaya yang dilarang untuk makanan demi menekan biaya produksi dan memperpanjang masa simpan produk. Jika dievaluasi dari sudut pandang etika bisnis dan keberlanjutan usaha jangka panjang, dampak fatal yang paling mungkin terjadi pada usaha tersebut adalah...",
+        options: [
+          "Keuntungan usaha akan meningkat drastis secara konsisten selamanya",
+          "Kehilangan kepercayaan konsumen, ancaman sanksi pidana/hukum, serta kehancuran reputasi bisnis yang menyebabkan usaha bangkrut",
+          "Pesaing bisnis akan meniru langkah tersebut untuk meraih sukses yang sama",
+          "Pemerintah memberikan penghargaan atas efisiensi biaya produksi",
+          "Usaha akan makin disukai oleh pasar internasional"
+        ],
+        correctIndex: 1,
+        explanation: "Jawaban B: Kehilangan kepercayaan konsumen, ancaman sanksi pidana/hukum, serta kehancuran reputasi bisnis yang menyebabkan usaha bangkrut"
+      },
+      {
+        id: "Q15",
+        topic: "Peluang Usaha",
+        question: "Keluhan pelanggan mengenai lamanya waktu tunggu pengiriman barang pada sebuah usaha niaga-el (e-commerce) jika dianalisis dapat dikelompokkan menjadi peluang inovasi berupa...",
+        options: [
+          "Penurunan kualitas mutu bahan baku barang",
+          "Pengemasan barang yang lebih tebal dan berat",
+          "Pengembangan sistem pelacakan pengiriman otomatis dan kerja sama mitra logistik yang lebih cepat",
+          "Peningkatan harga jual produk untuk membatasi jumlah pesanan",
+          "Penutupan layanan penjualan daring dan beralih ke toko fisik"
+        ],
+        correctIndex: 2,
+        explanation: "Jawaban C: Pengembangan sistem pelacakan pengiriman otomatis dan kerja sama mitra logistik yang lebih cepat"
+      },
+      {
+        id: "Q16",
+        topic: "Merek dan Branding",
+        question: "Sebuah merek pakaian lokal yang legendaris mengalami penurunan penjualan karena dianggap usang oleh konsumen Generasi Z. Manajemen memutuskan melakukan rebranding total: mengubah logo menjadi minimalis modern, mengubah gaya komunikasi di media sosial menjadi ramah anak muda, serta menggunakan bahan ramah lingkungan.\nJika dievaluasi dari strategi manajemen merek, efektivitas keputusan rebranding tersebut adalah...",
+        options: [
+          "Tidak efektif karena merusak warisan sejarah produk lama secara keseluruhan",
+          "Sangat efektif untuk merejuvenasi (memudakan kembali) citra merek agar relevan dengan selera dan nilai-nilai pasar Generasi Z tanpa kehilangan kualitas dasar",
+          "Tidak efektif karena Generasi Z tidak peduli terhadap tampilan logo produk",
+          "Efektif hanya jika harga pakaian diturunkan hingga 90%",
+          "Menyebabkan merek tersebut langsung kehilangan seluruh pelanggan lama tanpa dapat pelanggan baru"
+        ],
+        correctIndex: 1,
+        explanation: "Jawaban B: Sangat efektif untuk merejuvenasi (memudakan kembali) citra merek agar relevan dengan selera dan nilai-nilai pasar Generasi Z tanpa kehilangan kualitas dasar"
+      },
+      {
+        id: "Q17",
+        topic: "Design Thinking",
+        question: "Hasil observasi di bengkel sepeda motor menunjukkan: \"Pelanggan usia pekerja merasa terganggu karena harus menunggu antrean servis selama 2 jam pada jam kerja, sehingga pekerjaan kantor mereka terbengkalai.\"\nRumusan Point of View (POV) yang paling tepat pada tahap Define berdasarkan masalah di atas adalah...",
+        options: [
+          "Bengkel membutuhkan lebih banyak kursi tunggu agar pelanggan nyaman menunggu lama.",
+          "Pelanggan usia pekerja membutuhkan cara perawatan motor yang efisien tanpa mengorbankan waktu kerja mereka, karena menunggu antrean 2 jam mengganggu produktivitas.",
+          "Mekanik bengkel membutuhkan kenaikan gaji karena bekerja terlalu keras.",
+          "Sepeda motor pelanggan membutuhkan suku cadang yang tahan lama agar jarang diservis.",
+          "Bengkel harus membatasi jumlah pelanggan maksimal 5 orang per hari."
+        ],
+        correctIndex: 1,
+        explanation: "Jawaban B: Pelanggan usia pekerja membutuhkan cara perawatan motor yang efisien tanpa mengorbankan waktu kerja mereka, karena menunggu antrean 2 jam mengganggu produktivitas."
+      },
+      {
+        id: "Q18",
+        topic: "Peluang Usaha",
+        question: "Data rekapitulasi keluhan pelanggan usaha Laundry Express milik Unit Produksi SMK selama satu bulan ditunjukkan pada grafik berikut:\nKeterlambatan pengembalian pakaian: 55%\nPakaian tertukar/hilang: 25%\nHasil setrika kurang rapi: 15%\nSikap staf kurang ramah: 5%\nBerdasarkan data numerik di atas, tindakan prioritas utama yang wajib dilakukan manajemen untuk menyelesaikan akar masalah terbesar adalah...",
+        options: [
+          "Mengadakan pelatihan pelayanan prima (customer service) bagi staf",
+          "Mengganti jenis deterjen yang digunakan dengan aroma baru",
+          "Memperbaiki dan menata ulang SOP penjadwalan proses cuci-pengeringan serta sistem pelabelan pakaian",
+          "Membeli mesin setrika uap baru yang mahal",
+          "Naikkan tarif layanan agar jumlah pelanggan berkurang"
+        ],
+        correctIndex: 2,
+        explanation: "Jawaban C: Memperbaiki dan menata ulang SOP penjadwalan proses cuci-pengeringan serta sistem pelabelan pakaian"
+      },
+      {
+        id: "Q19",
+        topic: "Peluang Usaha",
+        question: "Bengkel Praktik Keahlian Otomotif SMK menghasilkan limbah oli bekas dan suku cadang logam yang menumpuk sehingga mencemari lingkungan sekolah. Solusi berbasis peluang usaha kreatif yang paling tepat untuk mengatasi masalah tersebut adalah...",
+        options: [
+          "Membuang limbah oli bekas ke saluran air pada malam hari",
+          "Menimbun seluruh limbah logam di dalam tanah belakang sekolah",
+          "Bekerja sama dengan pihak ketiga pengolah limbah B3 resmi dan mengolah limbah logam menjadi produk kriya/aksesoris industri bernilai jual",
+          "Membakar seluruh sisa suku cadang plastik dan oli di area terbuka",
+          "Menyimpan limbah secara permanen hingga gudang sekolah penuh"
+        ],
+        correctIndex: 2,
+        explanation: "Jawaban C: Bekerja sama dengan pihak ketiga pengolah limbah B3 resmi dan mengolah limbah logam menjadi produk kriya/aksesoris industri bernilai jual"
+      },
+      {
+        id: "Q20",
+        topic: "Kreativitas dan Inovasi",
+        question: "Tim siswa SMK Kuliner mengembangkan produk olahan berbahan dasar singkong lokal. Mereka dihadapkan pada dua pilihan strategi pengolahan:\n    - Opsi A: Menjual keripik singkong dengan bumbu tabur konvensional dalam kemasan plastik transparan seharga Rp5.000/bungkus.\n    - Opsi B: Mengolah singkong menjadi frozen cassava fries dengan varian rasa otentik khas daerah, menggunakan kemasan vacuum stand-up pouch kedap udara dilengkapi kode QR cerita produk, seharga Rp20.000/pack.\nJika dievaluasi dari segi efektivitas daya saing pasar modern dan nilai tambah produk, keputusan terbaik yang harus diambil beserta alasannya adalah...",
+        options: [
+          "Mengambil Opsi A karena harga lebih murah sehingga pasti lebih disukai semua kalangan",
+          "Mengambil Opsi B karena memberikan nilai tambah pada kualitas, ketahanan produk, dan estetika kemasan yang sesuai tren pasar modern",
+          "Mengambil Opsi A karena proses pembuatannya jauh lebih cepat dan hemat tenaga",
+          "Mengabaikan kedua opsi dan menjual singkong mentah hasil panen langsung ke pasar tradisional",
+          "Memilih Opsi A dan B secara bersamaan tanpa memisahkan segmen pasar target"
+        ],
+        correctIndex: 1,
+        explanation: "Jawaban B: Mengambil Opsi B karena memberikan nilai tambah pada kualitas, ketahanan produk, dan estetika kemasan yang sesuai tren pasar modern"
+      }
+    ];
+
+    let activeQuestionBank = [];
+    let bookGroups = [];
+
+    const BOOK_SPAWN_COORDINATES = [
+      { x: 16, z: -5, label: "Depan Lab Bisnis Digital" },
+      { x: -16, z: 3, label: "Taman Belajar" },
+      { x: 13, z: 14, label: "Kantin Digital" },
+      { x: -13, z: -13, label: "Selasar Utara" },
+      { x: -14, z: 16, label: "Taman Selatan" },
+      { x: 18, z: -15, label: "Koridor Timur" },
+      { x: 0, z: 22, label: "Gerbang Utama" },
+      { x: -20, z: -6, label: "Ruang Praktik PKK" }
+    ];
+
+    function loadQuestionBankFromStorage() {
+      const raw = localStorage.getItem(STORAGE_KEY_CUSTOM_QUESTIONS);
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            activeQuestionBank = parsed.map((q, idx) => ({
+              id: q.id || `Q${String(idx + 1).padStart(2, '0')}`,
+              topic: q.topic || "Bisnis Digital",
+              question: q.question,
+              options: q.options,
+              correctIndex: typeof q.correctIndex === 'number' ? q.correctIndex : 0,
+              explanation: q.explanation || "Jawaban telah dicatat oleh sistem."
+            }));
+            return;
+          }
+        } catch (e) {}
+      }
+      activeQuestionBank = JSON.parse(JSON.stringify(DEFAULT_QUESTION_BANK));
+    }
+
+    function buildDynamicBookGroups() {
+      const totalQuestions = activeQuestionBank.length;
+      const totalBooks = Math.ceil(totalQuestions / 10);
+      bookGroups = [];
+
+      for (let bIdx = 0; bIdx < totalBooks; bIdx++) {
+        const startIdx = bIdx * 10;
+        const endIdx = Math.min(startIdx + 10, totalQuestions);
+        const slice = activeQuestionBank.slice(startIdx, endIdx).map((q, offset) => ({
+          ...q,
+          originalIndex: startIdx + offset + 1
+        }));
+
+        if (slice.length === 0) continue;
+
+        let pos;
+        if (bIdx < BOOK_SPAWN_COORDINATES.length) {
+          pos = BOOK_SPAWN_COORDINATES[bIdx];
+        } else {
+          const angle = (bIdx / totalBooks) * Math.PI * 2;
+          pos = {
+            x: Math.round(Math.cos(angle) * 18),
+            z: Math.round(Math.sin(angle) * 18),
+            label: `Area Kampus #${bIdx + 1}`
+          };
+        }
+
+        bookGroups.push({
+          id: `book_${bIdx + 1}`,
+          bookNumber: bIdx + 1,
+          title: `Buku ${bIdx + 1}`,
+          rangeLabel: `Soal ${startIdx + 1}–${endIdx}`,
+          locationLabel: pos.label,
+          position: { x: pos.x, z: pos.z },
+          questions: slice
+        });
+      }
+    }
+
+    loadQuestionBankFromStorage();
+    buildDynamicBookGroups();
+
+    function getPointsPerQuestion() {
+      const totalQ = activeQuestionBank.length;
+      return totalQ > 0 ? 100 / totalQ : 0;
+    }
+
+    /**
+     * 2. PROCEDURAL WEB AUDIO API SOUND ENGINE
+     */
+    class SoundEffects {
+      constructor() {
+        this.ctx = null;
+        this.muted = false;
+      }
+
+      init() {
+        if (!this.ctx) {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          if (AudioContext) this.ctx = new AudioContext();
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      }
+
+      toggleMute() {
+        this.muted = !this.muted;
+        return this.muted;
+      }
+
+      playTone(freq, type, duration, vol = 0.12, delay = 0) {
+        if (this.muted) return;
+        this.init();
+        if (!this.ctx) return;
+
+        const now = this.ctx.currentTime + delay;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, now);
+
+        gain.gain.setValueAtTime(0.001, now);
+        gain.gain.exponentialRampToValueAtTime(vol, now + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + duration + 0.02);
+      }
+
+      playInteract() {
+        this.playTone(523.25, 'sine', 0.15, 0.12, 0);
+        this.playTone(659.25, 'sine', 0.2, 0.12, 0.08);
+      }
+
+      playCorrect() {
+        this.playTone(523.25, 'triangle', 0.16, 0.14, 0);
+        this.playTone(659.25, 'triangle', 0.16, 0.14, 0.09);
+        this.playTone(783.99, 'triangle', 0.28, 0.16, 0.18);
+      }
+
+      playWrong() {
+        this.playTone(220, 'sawtooth', 0.22, 0.10, 0);
+        this.playTone(185, 'sawtooth', 0.28, 0.10, 0.14);
+      }
+
+      playVictory() {
+        const notes = [523.25, 659.25, 783.99, 1046.50];
+        notes.forEach((freq, idx) => {
+          this.playTone(freq, 'triangle', 0.32, 0.15, idx * 0.11);
+        });
+      }
+    }
+
+    const sfx = new SoundEffects();
+
+    /**
+     * 3. GAME STATE MANAGEMENT
+     */
+    const gameState = {
+      isPlaying: false,
+      isModalOpen: false,
+      studentName: "",
+      studentClass: "",
+      avatarGender: "male",
+      questStartedByIbuRia: false,
+      allBooksCompleted: false,
+      score: 0,
+      completedBooks: {},
+      activeBookId: null,
+      activeQuestionIndex: 0,
+      hasAnsweredCurrent: false,
+      nearbyTarget: null,
+      hasSubmittedToTeacher: false
+    };
+
+    /**
+     * 4. BABYLON.JS ENGINE, SCENE, LIGHTING & CAMPUS ENVIRONMENT
+     */
+    const canvas = document.getElementById('game-canvas');
+    const engine = new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true, powerPreference: "high-performance" });
+    const scene = new BABYLON.Scene(engine);
+    scene.clearColor = new BABYLON.Color4(0.68, 0.85, 0.98, 1.0);
+    scene.fogMode = BABYLON.Scene.FOGMODE_EXP2;
+    scene.fogColor = new BABYLON.Color3(0.75, 0.88, 0.98);
+    scene.fogDensity = 0.0058;
+
+    // Main Third-Person Camera (Initialized before post-processing pipeline)
+    const camera = new BABYLON.FreeCamera("mainCam", new BABYLON.Vector3(0, 6, 22), scene);
+    camera.fov = 0.92;
+    camera.minZ = 0.1;
+    camera.maxZ = 220;
+
+    // Cinematic Sky Dome & Sun Disc
+    const skyDome = BABYLON.MeshBuilder.CreateSphere("skyDome", { diameter: 260, segments: 32, sideOrientation: BABYLON.Mesh.BACKSIDE }, scene);
+    const skyTex = new BABYLON.DynamicTexture("skyTex", { width: 512, height: 512 }, scene, false);
+    const skyCtx = skyTex.getContext();
+    const skyGrad = skyCtx.createLinearGradient(0, 0, 0, 512);
+    skyGrad.addColorStop(0.0, "#1E40AF");
+    skyGrad.addColorStop(0.32, "#3B82F6");
+    skyGrad.addColorStop(0.55, "#93C5FD");
+    skyGrad.addColorStop(0.72, "#E0F2FE");
+    skyGrad.addColorStop(1.0, "#F8FAFC");
+    skyCtx.fillStyle = skyGrad;
+    skyCtx.fillRect(0, 0, 512, 512);
+    // Soft painted clouds
+    skyCtx.fillStyle = "rgba(255, 255, 255, 0.35)";
+    for (let c = 0; c < 28; c++) {
+      const cx = (c * 73) % 512;
+      const cy = 170 + ((c * 37) % 120);
+      skyCtx.beginPath();
+      skyCtx.ellipse(cx, cy, 42 + (c % 25), 11 + (c % 8), 0, 0, Math.PI * 2);
+      skyCtx.fill();
+    }
+    skyTex.update();
+    const skyMat = new BABYLON.StandardMaterial("skyMat", scene);
+    skyMat.diffuseTexture = skyTex;
+    skyMat.emissiveTexture = skyTex;
+    skyMat.disableLighting = true;
+    skyMat.fogEnabled = false;
+    skyDome.material = skyMat;
+
+    // Warm Golden Sun & Subtle Glow Layer
+    const sunSphere = BABYLON.MeshBuilder.CreateSphere("sunDisc", { diameter: 9, segments: 16 }, scene);
+    sunSphere.position = new BABYLON.Vector3(55, 68, 48);
+    const sunMat = new BABYLON.StandardMaterial("sunMat", scene);
+    sunMat.emissiveColor = new BABYLON.Color3(1.0, 0.93, 0.75);
+    sunMat.disableLighting = true;
+    sunMat.fogEnabled = false;
+    sunSphere.material = sunMat;
+
+    const glowLayer = new BABYLON.GlowLayer("glowLayer", scene, {
+      mainTextureFixedSize: 512,
+      blurKernelSize: 32
+    });
+    glowLayer.intensity = 0.45;
+
+    // Cinematic Three-Point Environmental Lighting & Soft Shadows
+    const hemiLight = new BABYLON.HemisphericLight("hemiLight", new BABYLON.Vector3(0, 1, 0), scene);
+    hemiLight.intensity = 0.78;
+    hemiLight.diffuse = new BABYLON.Color3(0.96, 0.98, 1.0);
+    hemiLight.groundColor = new BABYLON.Color3(0.42, 0.46, 0.52);
+
+    const dirLight = new BABYLON.DirectionalLight("dirLight", new BABYLON.Vector3(-0.55, -1, -0.45), scene);
+    dirLight.position = new BABYLON.Vector3(32, 52, 28);
+    dirLight.intensity = 1.25;
+    dirLight.diffuse = new BABYLON.Color3(1.0, 0.96, 0.88);
+
+    const rimLight = new BABYLON.DirectionalLight("rimLight", new BABYLON.Vector3(0.5, -0.6, 0.6), scene);
+    rimLight.intensity = 0.32;
+    rimLight.diffuse = new BABYLON.Color3(0.65, 0.82, 1.0);
+
+    const shadowGenerator = new BABYLON.ShadowGenerator(2048, dirLight);
+    shadowGenerator.usePercentageCloserFiltering = true;
+    shadowGenerator.filteringQuality = BABYLON.ShadowGenerator.QUALITY_HIGH;
+    shadowGenerator.bias = 0.0005;
+
+    // AAA Post-Processing Pipeline (ACES Tone Mapping, Subtle Bloom, FXAA)
+    const defaultPipeline = new BABYLON.DefaultRenderingPipeline("defaultPipeline", true, scene, [camera]);
+    defaultPipeline.fxaaEnabled = true;
+    defaultPipeline.bloomEnabled = true;
+    defaultPipeline.bloomThreshold = 0.82;
+    defaultPipeline.bloomWeight = 0.22;
+    defaultPipeline.bloomKernel = 48;
+    defaultPipeline.bloomScale = 0.5;
+    defaultPipeline.imageProcessingEnabled = true;
+    defaultPipeline.imageProcessing.toneMappingEnabled = true;
+    defaultPipeline.imageProcessing.toneMappingType = BABYLON.ImageProcessingConfiguration.TONEMAPPING_ACES;
+    defaultPipeline.imageProcessing.contrast = 1.08;
+    defaultPipeline.imageProcessing.exposure = 1.04;
+
+    // Scalable Graphics Quality Presets (ULTRA / HIGH / MEDIUM / LOW)
+    const QUALITY_LEVELS = ["ULTRA", "HIGH", "MEDIUM", "LOW"];
+    let currentQualityIndex = 0;
+
+    function applyGraphicsQuality(levelName) {
+      const labelEl = document.getElementById('label-graphics-quality');
+      if (labelEl) labelEl.textContent = levelName;
+
+      if (levelName === "ULTRA") {
+        engine.setHardwareScalingLevel(1 / Math.min(window.devicePixelRatio || 1, 2));
+        shadowGenerator.mapSize = 2048;
+        defaultPipeline.fxaaEnabled = true;
+        defaultPipeline.bloomEnabled = true;
+        glowLayer.isEnabled = true;
+      } else if (levelName === "HIGH") {
+        engine.setHardwareScalingLevel(1.0);
+        shadowGenerator.mapSize = 1024;
+        defaultPipeline.fxaaEnabled = true;
+        defaultPipeline.bloomEnabled = true;
+        glowLayer.isEnabled = true;
+      } else if (levelName === "MEDIUM") {
+        engine.setHardwareScalingLevel(1.25);
+        shadowGenerator.mapSize = 1024;
+        defaultPipeline.fxaaEnabled = true;
+        defaultPipeline.bloomEnabled = false;
+        glowLayer.isEnabled = true;
+      } else {
+        engine.setHardwareScalingLevel(1.5);
+        shadowGenerator.mapSize = 512;
+        defaultPipeline.fxaaEnabled = false;
+        defaultPipeline.bloomEnabled = false;
+        glowLayer.isEnabled = false;
+      }
+    }
+
+    const btnCycleQuality = document.getElementById('btn-cycle-quality');
+    if (btnCycleQuality) {
+      btnCycleQuality.addEventListener('click', () => {
+        currentQualityIndex = (currentQualityIndex + 1) % QUALITY_LEVELS.length;
+        applyGraphicsQuality(QUALITY_LEVELS[currentQualityIndex]);
+        sfx.playInteract();
+      });
+    }
+
+    // Colliders Array (AABB)
+    const colliders = [];
+    function addBoxCollider(x, z, width, depth) {
+      colliders.push({
+        minX: x - width / 2 - 0.65,
+        maxX: x + width / 2 + 0.65,
+        minZ: z - depth / 2 - 0.65,
+        maxZ: z + depth / 2 + 0.65
+      });
+    }
+
+    function checkCollision(x, z) {
+      if (Math.abs(x) > 36 || Math.abs(z) > 36) return true;
+      for (let i = 0; i < colliders.length; i++) {
+        const c = colliders[i];
+        if (x > c.minX && x < c.maxX && z > c.minZ && z < c.maxZ) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    // Procedural High-Detail Interlocking Paving Block & Grass PBR Textures
+    function createCampusFloorTexture() {
+      const tex = new BABYLON.DynamicTexture("floorTex", { width: 512, height: 512 }, scene, true);
+      const ctx = tex.getContext();
+      ctx.fillStyle = "#D4D9E0";
+      ctx.fillRect(0, 0, 512, 512);
+
+      // Subtle architectural stone & micro-paver variation
+      for (let i = 0; i < 3600; i++) {
+        const gx = Math.random() * 512;
+        const gy = Math.random() * 512;
+        ctx.fillStyle = Math.random() > 0.5 ? "rgba(255,255,255,0.20)" : "rgba(71,85,105,0.09)";
+        ctx.fillRect(gx, gy, 2, 2);
+      }
+
+      // Herringbone / modular tile seams with bevel highlight
+      for (let p = 0; p <= 512; p += 64) {
+        ctx.strokeStyle = "rgba(100, 116, 139, 0.34)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(p, 0);
+        ctx.lineTo(p, 512);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(0, p);
+        ctx.lineTo(512, p);
+        ctx.stroke();
+
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(p + 2, 0);
+        ctx.lineTo(p + 2, 512);
+        ctx.stroke();
+      }
+      tex.update();
+      tex.uScale = 24;
+      tex.vScale = 24;
+      return tex;
+    }
+
+    function createRichGrassTexture() {
+      const tex = new BABYLON.DynamicTexture("richGrassTex", { width: 512, height: 512 }, scene, true);
+      const ctx = tex.getContext();
+      ctx.fillStyle = "#2E9E53";
+      ctx.fillRect(0, 0, 512, 512);
+
+      const greens = ["#228B46", "#38B862", "#4ADE80", "#1E7A3D", "#65D687"];
+      for (let i = 0; i < 6500; i++) {
+        const x = Math.random() * 512;
+        const y = Math.random() * 512;
+        ctx.fillStyle = greens[i % greens.length];
+        ctx.fillRect(x, y, 2, 5);
+      }
+      tex.update();
+      tex.uScale = 14;
+      tex.vScale = 14;
+      return tex;
+    }
+
+    const floorMat = new BABYLON.PBRMaterial("floorMat", scene);
+    floorMat.albedoTexture = createCampusFloorTexture();
+    floorMat.metallic = 0.02;
+    floorMat.roughness = 0.86;
+
+    const ground = BABYLON.MeshBuilder.CreateGround("ground", { width: 86, height: 86 }, scene);
+    ground.material = floorMat;
+    ground.receiveShadows = true;
+
+    // Area Tanah Hijau di Luar Lapangan Utama (Belakang & Samping Bangunan) + Ornamen Rumput Bergoyang
+    const grassFieldMat = new BABYLON.PBRMaterial("grassFieldMat", scene);
+    grassFieldMat.albedoTexture = createRichGrassTexture();
+    grassFieldMat.metallic = 0.0;
+    grassFieldMat.roughness = 0.88;
+
+    const outerLawnPatches = [
+      { name: "lawnNorth", x: 0, z: -28.5, w: 76, d: 19 },
+      { name: "lawnSouth", x: 0, z: 29.0, w: 76, d: 17 },
+      { name: "lawnWest", x: -29.0, z: 1.5, w: 18, d: 41 },
+      { name: "lawnEast", x: 29.0, z: 1.5, w: 18, d: 41 }
+    ];
+    outerLawnPatches.forEach((p) => {
+      const lawn = BABYLON.MeshBuilder.CreateBox(p.name, { width: p.w, height: 0.02, depth: p.d }, scene);
+      lawn.position = new BABYLON.Vector3(p.x, 0.012, p.z);
+      lawn.material = grassFieldMat;
+      lawn.receiveShadows = true;
+    });
+
+    // Ornamen Rumpun Rumput 3D Bergoyang Tertiup Angin + Bunga Taman Warna-Warni
+    const grassBlades = [];
+    const bladeMat = new BABYLON.StandardMaterial("grassBladeMat", scene);
+    bladeMat.diffuseColor = BABYLON.Color3.FromHexString("#15803D");
+    bladeMat.emissiveColor = new BABYLON.Color3(0.02, 0.08, 0.02);
+
+    const flowerColors = ["#F43F5E", "#FBBF24", "#A855F7", "#38BDF8", "#FB923C"];
+    const flowerMats = flowerColors.map((hex, idx) => {
+      const fm = new BABYLON.StandardMaterial(`flowerMat_${idx}`, scene);
+      fm.diffuseColor = BABYLON.Color3.FromHexString(hex);
+      fm.emissiveColor = BABYLON.Color3.FromHexString(hex).scale(0.25);
+      return fm;
+    });
+
+    const grassZones = [
+      { minX: -34, maxX: 34, minZ: -35, maxZ: -19 },
+      { minX: -34, maxX: 34, minZ: 20, maxZ: 35 },
+      { minX: -35, maxX: -20, minZ: -18, maxZ: 19 },
+      { minX: 20, maxX: 35, minZ: -18, maxZ: 19 }
+    ];
+
+    grassZones.forEach((zone, zIdx) => {
+      for (let i = 0; i < 52; i++) {
+        const gx = zone.minX + Math.random() * (zone.maxX - zone.minX);
+        const gz = zone.minZ + Math.random() * (zone.maxZ - zone.minZ);
+        if (Math.abs(gx) < 13 && gz < -18.5) continue;
+        if (gx > 20.5 && Math.abs(gz + 3) < 8.5) continue;
+        if (gx < -20.5 && Math.abs(gz - 4) < 7.5) continue;
+        if (Math.abs(gx - 16) < 7.5 && Math.abs(gz - 24) < 5) continue;
+        if (Math.abs(gx) < 4.5 && gz > 28) continue;
+
+        const tuft = new BABYLON.TransformNode(`tuft_${zIdx}_${i}`, scene);
+        tuft.position = new BABYLON.Vector3(gx, 0.05, gz);
+
+        for (let b = 0; b < 3; b++) {
+          const blade = BABYLON.MeshBuilder.CreateCylinder(`blade_${zIdx}_${i}_${b}`, {
+            diameterTop: 0.0,
+            diameterBottom: 0.09,
+            height: 0.36 + Math.random() * 0.2,
+            tessellation: 4
+          }, scene);
+          blade.position = new BABYLON.Vector3((b - 1) * 0.08, 0.18, (b % 2) * 0.06);
+          blade.rotation.z = (b - 1) * 0.18;
+          blade.material = bladeMat;
+          blade.parent = tuft;
+        }
+
+        if (i % 4 === 0) {
+          const blossom = BABYLON.MeshBuilder.CreateSphere(`flower_${zIdx}_${i}`, { diameter: 0.16, segments: 8 }, scene);
+          blossom.position = new BABYLON.Vector3(0, 0.42, 0.03);
+          blossom.material = flowerMats[(i + zIdx) % flowerMats.length];
+          blossom.parent = tuft;
+        }
+
+        grassBlades.push({
+          node: tuft,
+          phase: Math.random() * Math.PI * 2,
+          speed: 1.6 + Math.random() * 0.8
+        });
+      }
+    });
+
+    // Subtle Courtyard Border Trim & Tactical Court Lines (Separated Y heights to prevent Z-fighting)
+    const borderMat = new BABYLON.StandardMaterial("borderMat", scene);
+    borderMat.diffuseColor = BABYLON.Color3.FromHexString("#64748B");
+    const courtyardRim = BABYLON.MeshBuilder.CreateBox("courtyardRim", { width: 38.2, height: 0.025, depth: 36.2 }, scene);
+    courtyardRim.position = new BABYLON.Vector3(0, 0.028, 2);
+    courtyardRim.material = borderMat;
+    courtyardRim.receiveShadows = true;
+
+    const courtFloorMat = new BABYLON.PBRMaterial("courtFloorMat", scene);
+    courtFloorMat.albedoTexture = createCampusFloorTexture();
+    courtFloorMat.albedoColor = BABYLON.Color3.FromHexString("#EEF2F6");
+    courtFloorMat.metallic = 0.02;
+    courtFloorMat.roughness = 0.84;
+    const courtyard = BABYLON.MeshBuilder.CreateBox("courtyard", { width: 36.8, height: 0.03, depth: 34.8 }, scene);
+    courtyard.position = new BABYLON.Vector3(0, 0.048, 2);
+    courtyard.material = courtFloorMat;
+    courtyard.receiveShadows = true;
+
+    // Decorative Plaza Ring Around Flagpole
+    const plazaRingMat = new BABYLON.StandardMaterial("plazaRingMat", scene);
+    plazaRingMat.diffuseColor = BABYLON.Color3.FromHexString("#1E3A8A");
+    const plazaRing = BABYLON.MeshBuilder.CreateTorus("plazaRing", { diameter: 8.5, thickness: 0.16, tessellation: 48 }, scene);
+    plazaRing.position = new BABYLON.Vector3(0, 0.085, 2);
+    plazaRing.material = plazaRingMat;
+
+    // Walkways (Distinct Y = 0.068 above courtyard & lawns to eliminate Z-fighting)
+    const pathMat = new BABYLON.PBRMaterial("pathMat", scene);
+    pathMat.albedoColor = BABYLON.Color3.FromHexString("#CBD5E1");
+    pathMat.metallic = 0.02;
+    pathMat.roughness = 0.82;
+
+    const northPath = BABYLON.MeshBuilder.CreateBox("northPath", { width: 8, height: 0.025, depth: 8 }, scene);
+    northPath.position = new BABYLON.Vector3(0, 0.068, -17.5);
+    northPath.material = pathMat;
+    northPath.receiveShadows = true;
+
+    const southGatePath = BABYLON.MeshBuilder.CreateBox("southGatePath", { width: 7, height: 0.025, depth: 17.5 }, scene);
+    southGatePath.position = new BABYLON.Vector3(0, 0.068, 28.5);
+    southGatePath.material = pathMat;
+    southGatePath.receiveShadows = true;
+
+    const eastPath = BABYLON.MeshBuilder.CreateBox("eastPath", { width: 4.5, height: 0.025, depth: 6 }, scene);
+    eastPath.position = new BABYLON.Vector3(20.8, 0.068, 2);
+    eastPath.material = pathMat;
+    eastPath.receiveShadows = true;
+
+    const westPath = BABYLON.MeshBuilder.CreateBox("westPath", { width: 4.5, height: 0.025, depth: 6 }, scene);
+    westPath.position = new BABYLON.Vector3(-20.8, 0.068, 2);
+    westPath.material = pathMat;
+    westPath.receiveShadows = true;
+
+    // Architectural Perimeter Fence with Pillars & South Entrance Archway
+    const fenceMat = new BABYLON.PBRMaterial("fenceMat", scene);
+    fenceMat.albedoColor = BABYLON.Color3.FromHexString("#1E293B");
+    fenceMat.metallic = 0.35;
+    fenceMat.roughness = 0.6;
+    [
+      { name: "fN", x: 0, z: -37.5, w: 76, d: 1 },
+      { name: "fSL", x: -21.5, z: 37.5, w: 33, d: 1 },
+      { name: "fSR", x: 21.5, z: 37.5, w: 33, d: 1 },
+      { name: "fW", x: -37.5, z: 0, w: 1, d: 76 },
+      { name: "fE", x: 37.5, z: 0, w: 1, d: 76 }
+    ].forEach((b) => {
+      const m = BABYLON.MeshBuilder.CreateBox(b.name, { width: b.w, height: 2.3, depth: b.d }, scene);
+      m.position = new BABYLON.Vector3(b.x, 1.15, b.z);
+      m.material = fenceMat;
+      m.receiveShadows = true;
+      shadowGenerator.addShadowCaster(m);
+    });
+
+    // Grand School Gate Pillars & Arch at South Entrance
+    const gatePillarMat = new BABYLON.PBRMaterial("gatePillarMat", scene);
+    gatePillarMat.albedoColor = BABYLON.Color3.FromHexString("#F8FAFC");
+    gatePillarMat.roughness = 0.7;
+    [-4.6, 4.6].forEach((gx, i) => {
+      const gp = BABYLON.MeshBuilder.CreateBox(`gatePillar_${i}`, { width: 1.5, height: 5.4, depth: 1.5 }, scene);
+      gp.position = new BABYLON.Vector3(gx, 2.7, 37.3);
+      gp.material = gatePillarMat;
+      shadowGenerator.addShadowCaster(gp);
+    });
+    const gateArchMat = new BABYLON.PBRMaterial("gateArchMat", scene);
+    gateArchMat.albedoColor = BABYLON.Color3.FromHexString("#1E3A8A");
+    gateArchMat.metallic = 0.2;
+    gateArchMat.roughness = 0.5;
+    const gateArch = BABYLON.MeshBuilder.CreateBox("gateArch", { width: 11.2, height: 1.1, depth: 1.7 }, scene);
+    gateArch.position = new BABYLON.Vector3(0, 5.5, 37.3);
+    gateArch.material = gateArchMat;
+    shadowGenerator.addShadowCaster(gateArch);
+
+    // Helper: Detailed Architectural School Building Generator (With Colonnade Pillars, Terraces & Reflective Glass)
+    function createBuilding(name, x, z, w, h, d, wallHex, roofHex, trimHex) {
+      const parent = new BABYLON.TransformNode(name + "_grp", scene);
+      parent.position = new BABYLON.Vector3(x, 0, z);
+
+      const wallMat = new BABYLON.PBRMaterial(name + "_wall", scene);
+      wallMat.albedoColor = BABYLON.Color3.FromHexString(wallHex);
+      wallMat.metallic = 0.0;
+      wallMat.roughness = 0.82;
+
+      const roofMat = new BABYLON.PBRMaterial(name + "_roof", scene);
+      roofMat.albedoColor = BABYLON.Color3.FromHexString(roofHex);
+      roofMat.metallic = 0.08;
+      roofMat.roughness = 0.68;
+
+      const trimMat = new BABYLON.PBRMaterial(name + "_trim", scene);
+      trimMat.albedoColor = BABYLON.Color3.FromHexString(trimHex);
+      trimMat.metallic = 0.1;
+      trimMat.roughness = 0.65;
+
+      // Raised Porch / Plinth
+      const plinth = BABYLON.MeshBuilder.CreateBox(name + "_plinth", { width: w + 1.4, height: 0.35, depth: d + 1.4 }, scene);
+      plinth.position.y = 0.175;
+      plinth.material = trimMat;
+      plinth.parent = parent;
+      plinth.receiveShadows = true;
+
+      const body = BABYLON.MeshBuilder.CreateBox(name + "_body", { width: w, height: h, depth: d }, scene);
+      body.position.y = h / 2 + 0.2;
+      body.material = wallMat;
+      body.parent = parent;
+      body.receiveShadows = true;
+      shadowGenerator.addShadowCaster(body);
+
+      // Horizontal Architectural Cornice Band
+      const midBand = BABYLON.MeshBuilder.CreateBox(name + "_midBand", { width: w + 0.3, height: 0.32, depth: d + 0.3 }, scene);
+      midBand.position.y = h * 0.52;
+      midBand.material = trimMat;
+      midBand.parent = parent;
+
+      // Multi-tiered Pitched / Overhanging Roof
+      const roof = BABYLON.MeshBuilder.CreateBox(name + "_roof", { width: w + 1.6, height: 0.85, depth: d + 1.6 }, scene);
+      roof.position.y = h + 0.55;
+      roof.material = roofMat;
+      roof.parent = parent;
+      shadowGenerator.addShadowCaster(roof);
+
+      const upperRoof = BABYLON.MeshBuilder.CreateBox(name + "_upperRoof", { width: w * 0.78, height: 0.75, depth: d * 0.78 }, scene);
+      upperRoof.position.y = h + 1.25;
+      upperRoof.material = roofMat;
+      upperRoof.parent = parent;
+      shadowGenerator.addShadowCaster(upperRoof);
+
+      // Front Architectural Columns (Widened center span on GedungUtama so signboard is completely unobstructed)
+      const colCount = Math.max(3, Math.floor(w / 5));
+      for (let c = 0; c < colCount; c++) {
+        let cx = -w / 2 + 0.8 + ((w - 1.6) / (colCount - 1)) * c;
+        if (name === "GedungUtama" && Math.abs(cx) < 6.4) {
+          cx = cx < 0 ? -6.6 : 6.6;
+        }
+        const col = BABYLON.MeshBuilder.CreateCylinder(`${name}_col_${c}`, { diameter: 0.38, height: h, tessellation: 14 }, scene);
+        col.position = new BABYLON.Vector3(cx, h / 2 + 0.2, d / 2 + 0.35);
+        col.material = wallMat;
+        col.parent = parent;
+        shadowGenerator.addShadowCaster(col);
+      }
+
+      // Reflective Glazed Windows with Frames
+      const winMat = new BABYLON.PBRMaterial(name + "_win", scene);
+      winMat.albedoColor = BABYLON.Color3.FromHexString("#38BDF8");
+      winMat.emissiveColor = BABYLON.Color3.FromHexString("#0284C7").scale(0.28);
+      winMat.metallic = 0.65;
+      winMat.roughness = 0.14;
+
+      const winCount = Math.max(2, Math.floor(w / 4.2));
+      for (let i = 0; i < winCount; i++) {
+        const wx = -w / 2 + (w / (winCount + 1)) * (i + 1);
+        const wF = BABYLON.MeshBuilder.CreateBox(`${name}_wf_${i}`, { width: 1.75, height: 1.65, depth: 0.16 }, scene);
+        wF.position = new BABYLON.Vector3(wx, h * 0.62, d / 2 + 0.06);
+        wF.material = winMat;
+        wF.parent = parent;
+
+        const wB = BABYLON.MeshBuilder.CreateBox(`${name}_wb_${i}`, { width: 1.75, height: 1.65, depth: 0.16 }, scene);
+        wB.position = new BABYLON.Vector3(wx, h * 0.62, -d / 2 - 0.06);
+        wB.material = winMat;
+        wB.parent = parent;
+      }
+
+      // Entrance Double Door on Front Facade
+      const doorMat = new BABYLON.PBRMaterial(name + "_door", scene);
+      doorMat.albedoColor = BABYLON.Color3.FromHexString("#1E293B");
+      doorMat.metallic = 0.3;
+      doorMat.roughness = 0.4;
+      const door = BABYLON.MeshBuilder.CreateBox(name + "_door", { width: 2.3, height: 2.3, depth: 0.2 }, scene);
+      door.position = new BABYLON.Vector3(0, 1.35, d / 2 + 0.06);
+      door.material = doorMat;
+      door.parent = parent;
+
+      addBoxCollider(x, z, w, d);
+      return parent;
+    }
+
+    // 4 School Buildings
+    createBuilding("GedungUtama", 0, -23, 24, 7.2, 8.5, "#F8FAFC", "#1E3A8A", "#94A3B8");
+    createBuilding("LabBisnisDigital", 24, -3, 7.5, 5.2, 15, "#F1F5F9", "#0284C7", "#CBD5E1");
+    createBuilding("KantinDigital", 16, 24, 13, 4.6, 7.5, "#FFFBEB", "#D97706", "#FDE68A");
+    createBuilding("MasjidSekolah", -24, 4, 7.5, 5.6, 13, "#F8FAFC", "#059669", "#A7F3D0");
+
+    // Papan Nama Gedung Utama: SMK NEGERI 1 CILEGON + Logo SMK N 1 Cilegon (Tepat di belakang Ibu Ria)
+    (function createSchoolSignboard() {
+      const signTex = new BABYLON.DynamicTexture("schoolSignTex", { width: 1152, height: 216 }, scene, true);
+      const sCtx = signTex.getContext();
+
+      // Background & Border
+      sCtx.fillStyle = "#0F172A";
+      sCtx.fillRect(0, 0, 1152, 216);
+      sCtx.strokeStyle = "#F59E0B";
+      sCtx.lineWidth = 10;
+      sCtx.strokeRect(8, 8, 1136, 200);
+
+      // Draw Detailed Emblem Logo SMK N 1 CILEGON (Pentagon Yellow Shield, Star, Flame, Pen, Open Book & Blue Ribbon)
+      sCtx.save();
+      sCtx.translate(115, 108);
+
+      // Golden Pentagon Shield
+      sCtx.beginPath();
+      sCtx.moveTo(0, -76);
+      sCtx.lineTo(74, -22);
+      sCtx.lineTo(46, 70);
+      sCtx.lineTo(-46, 70);
+      sCtx.lineTo(-74, -22);
+      sCtx.closePath();
+      const shieldGrad = sCtx.createLinearGradient(-60, -76, 60, 70);
+      shieldGrad.addColorStop(0, "#FDE047");
+      shieldGrad.addColorStop(0.5, "#EAB308");
+      shieldGrad.addColorStop(1, "#CA8A04");
+      sCtx.fillStyle = shieldGrad;
+      sCtx.fill();
+      sCtx.lineWidth = 4;
+      sCtx.strokeStyle = "#FEF08A";
+      sCtx.stroke();
+
+      // Top Gold Star
+      sCtx.fillStyle = "#FFFBEB";
+      sCtx.beginPath();
+      for (let i = 0; i < 5; i++) {
+        const outerA = (i * 72 - 90) * Math.PI / 180;
+        const innerA = (i * 72 - 54) * Math.PI / 180;
+        if (i === 0) sCtx.moveTo(Math.cos(outerA) * 11, -54 + Math.sin(outerA) * 11);
+        else sCtx.lineTo(Math.cos(outerA) * 11, -54 + Math.sin(outerA) * 11);
+        sCtx.lineTo(Math.cos(innerA) * 4.5, -54 + Math.sin(innerA) * 4.5);
+      }
+      sCtx.closePath();
+      sCtx.fill();
+
+      // Silver Wreath Arcs (Left & Right)
+      sCtx.strokeStyle = "#F8FAFC";
+      sCtx.lineWidth = 5;
+      sCtx.beginPath();
+      sCtx.arc(4, -2, 46, 0.68 * Math.PI, 1.32 * Math.PI);
+      sCtx.stroke();
+      sCtx.beginPath();
+      sCtx.arc(-4, -2, 46, -0.32 * Math.PI, 0.32 * Math.PI);
+      sCtx.stroke();
+
+      // Flame Glow & Monument
+      sCtx.fillStyle = "#EA580C";
+      sCtx.beginPath();
+      sCtx.moveTo(-22, 16);
+      sCtx.quadraticCurveTo(-26, -14, 0, -28);
+      sCtx.quadraticCurveTo(26, -14, 22, 16);
+      sCtx.closePath();
+      sCtx.fill();
+
+      // Vertical Pen Nib
+      sCtx.fillStyle = "#E2E8F0";
+      sCtx.fillRect(-3.5, -36, 7, 50);
+
+      // Open Book (White Pages + Royal Blue Cover)
+      sCtx.fillStyle = "#1D4ED8";
+      sCtx.beginPath();
+      sCtx.moveTo(-36, 18);
+      sCtx.quadraticCurveTo(-18, 12, 0, 22);
+      sCtx.quadraticCurveTo(18, 12, 36, 18);
+      sCtx.lineTo(36, 25);
+      sCtx.quadraticCurveTo(18, 19, 0, 29);
+      sCtx.quadraticCurveTo(-18, 19, -36, 25);
+      sCtx.closePath();
+      sCtx.fill();
+
+      sCtx.fillStyle = "#FFFFFF";
+      sCtx.beginPath();
+      sCtx.moveTo(-34, 15);
+      sCtx.quadraticCurveTo(-17, 9, 0, 19);
+      sCtx.quadraticCurveTo(17, 9, 34, 15);
+      sCtx.lineTo(34, 20);
+      sCtx.quadraticCurveTo(17, 14, 0, 24);
+      sCtx.quadraticCurveTo(-17, 14, -34, 20);
+      sCtx.closePath();
+      sCtx.fill();
+
+      // Red Wave Line
+      sCtx.strokeStyle = "#DC2626";
+      sCtx.lineWidth = 2.5;
+      sCtx.beginPath();
+      sCtx.moveTo(-20, 38);
+      sCtx.bezierCurveTo(-12, 30, -6, 46, 0, 38);
+      sCtx.bezierCurveTo(6, 30, 12, 46, 20, 38);
+      sCtx.stroke();
+
+      // Bottom Blue Ribbon Banner ("SMK N 1 CILEGON")
+      sCtx.fillStyle = "#0284C7";
+      sCtx.beginPath();
+      sCtx.roundRect(-52, 46, 104, 17, 5);
+      sCtx.fill();
+      sCtx.strokeStyle = "#E0F2FE";
+      sCtx.lineWidth = 1.5;
+      sCtx.stroke();
+
+      sCtx.fillStyle = "#FFFFFF";
+      sCtx.font = "800 9.5px Inter, Arial, sans-serif";
+      sCtx.textAlign = "center";
+      sCtx.textBaseline = "middle";
+      sCtx.fillText("SMK N 1 CILEGON", 0, 55);
+      sCtx.restore();
+
+      // Main School Title & Updated Subtitle ("SMK PUSAT KEUNGGULAN")
+      sCtx.fillStyle = "#FFFFFF";
+      sCtx.font = "800 60px Inter, Arial, sans-serif";
+      sCtx.textAlign = "center";
+      sCtx.textBaseline = "middle";
+      sCtx.fillText("SMK NEGERI 1 CILEGON", 648, 86);
+
+      sCtx.fillStyle = "#FBBF24";
+      sCtx.font = "800 30px Inter, Arial, sans-serif";
+      sCtx.fillText("SMK PUSAT KEUNGGULAN", 648, 148);
+      signTex.update();
+
+      const signMat = new BABYLON.StandardMaterial("schoolSignMat", scene);
+      signMat.diffuseTexture = signTex;
+      signMat.emissiveColor = new BABYLON.Color3(0.35, 0.35, 0.35);
+
+      const signBackingMat = new BABYLON.StandardMaterial("signBackingMat", scene);
+      signBackingMat.diffuseColor = BABYLON.Color3.FromHexString("#1E3A8A");
+
+      const signFrame = BABYLON.MeshBuilder.CreateBox("schoolSignFrame", { width: 12.2, height: 2.3, depth: 0.28 }, scene);
+      signFrame.position = new BABYLON.Vector3(0, 6.2, -18.62);
+      signFrame.material = signBackingMat;
+
+      const signFace = BABYLON.MeshBuilder.CreatePlane("schoolSignFace", { width: 11.9, height: 2.1 }, scene);
+      signFace.position = new BABYLON.Vector3(0, 6.2, -18.47);
+      signFace.rotation.y = Math.PI;
+      signFace.material = signMat;
+    })();
+
+    // Flagpole in Courtyard Center
+    const poleGroup = new BABYLON.TransformNode("flagpole", scene);
+    poleGroup.position = new BABYLON.Vector3(0, 0, 2);
+
+    const poleBaseMat = new BABYLON.StandardMaterial("poleBaseMat", scene);
+    poleBaseMat.diffuseColor = BABYLON.Color3.FromHexString("#64748B");
+    const poleBase = BABYLON.MeshBuilder.CreateCylinder("poleBase", { diameterTop: 2.4, diameterBottom: 2.8, height: 0.4, tessellation: 20 }, scene);
+    poleBase.position.y = 0.2;
+    poleBase.material = poleBaseMat;
+    poleBase.parent = poleGroup;
+
+    const poleRodMat = new BABYLON.PBRMaterial("poleRodMat", scene);
+    poleRodMat.albedoColor = BABYLON.Color3.FromHexString("#E2E8F0");
+    poleRodMat.metallic = 0.7;
+    poleRodMat.roughness = 0.3;
+    const poleRod = BABYLON.MeshBuilder.CreateCylinder("poleRod", { diameterTop: 0.16, diameterBottom: 0.2, height: 9.5, tessellation: 14 }, scene);
+    poleRod.position.y = 4.75;
+    poleRod.material = poleRodMat;
+    poleRod.parent = poleGroup;
+    shadowGenerator.addShadowCaster(poleRod);
+
+    const redMat = new BABYLON.StandardMaterial("redFlagMat", scene);
+    redMat.diffuseColor = BABYLON.Color3.FromHexString("#DC2626");
+    const flagRed = BABYLON.MeshBuilder.CreateBox("flagRed", { width: 2.0, height: 0.6, depth: 0.06 }, scene);
+    flagRed.position = new BABYLON.Vector3(1.05, 8.9, 0);
+    flagRed.material = redMat;
+    flagRed.parent = poleGroup;
+
+    const whiteFlagMat = new BABYLON.StandardMaterial("whiteFlagMat", scene);
+    whiteFlagMat.diffuseColor = BABYLON.Color3.FromHexString("#F5F5F5");
+    const flagWhite = BABYLON.MeshBuilder.CreateBox("flagWhite", { width: 2.0, height: 0.6, depth: 0.06 }, scene);
+    flagWhite.position = new BABYLON.Vector3(1.05, 8.3, 0);
+    flagWhite.material = whiteFlagMat;
+    flagWhite.parent = poleGroup;
+
+    addBoxCollider(0, 2, 2.2, 2.2);
+
+    // Decorative Triangular Pine Trees (Pohon Segitiga Bertingkat)
+    const trunkMat = new BABYLON.StandardMaterial("trunkMat", scene);
+    trunkMat.diffuseColor = BABYLON.Color3.FromHexString("#78350F");
+    const leafMat = new BABYLON.StandardMaterial("leafMat", scene);
+    leafMat.diffuseColor = BABYLON.Color3.FromHexString("#15803D");
+    const leafTopMat = new BABYLON.StandardMaterial("leafTopMat", scene);
+    leafTopMat.diffuseColor = BABYLON.Color3.FromHexString("#22C55E");
+
+    [
+      [-14, -14], [14, -14], [-15, 14], [-22, -12], [22, 12], [-10, 24], [5, 25]
+    ].forEach(([tx, tz], idx) => {
+      const tNode = new BABYLON.TransformNode(`tree_${idx}`, scene);
+      tNode.position = new BABYLON.Vector3(tx, 0, tz);
+
+      const trunk = BABYLON.MeshBuilder.CreateCylinder(`trunk_${idx}`, { diameterTop: 0.42, diameterBottom: 0.62, height: 1.7, tessellation: 10 }, scene);
+      trunk.position.y = 0.85;
+      trunk.material = trunkMat;
+      trunk.parent = tNode;
+      shadowGenerator.addShadowCaster(trunk);
+
+      const coneBottom = BABYLON.MeshBuilder.CreateCylinder(`coneBot_${idx}`, {
+        diameterTop: 0.25,
+        diameterBottom: 2.9,
+        height: 2.3,
+        tessellation: 6
+      }, scene);
+      coneBottom.position.y = 2.45;
+      coneBottom.material = leafMat;
+      coneBottom.parent = tNode;
+      shadowGenerator.addShadowCaster(coneBottom);
+
+      const coneMid = BABYLON.MeshBuilder.CreateCylinder(`coneMid_${idx}`, {
+        diameterTop: 0.15,
+        diameterBottom: 2.2,
+        height: 1.95,
+        tessellation: 6
+      }, scene);
+      coneMid.position.y = 3.65;
+      coneMid.material = leafTopMat;
+      coneMid.parent = tNode;
+      shadowGenerator.addShadowCaster(coneMid);
+
+      const coneTop = BABYLON.MeshBuilder.CreateCylinder(`coneTop_${idx}`, {
+        diameterTop: 0.0,
+        diameterBottom: 1.45,
+        height: 1.5,
+        tessellation: 6
+      }, scene);
+      coneTop.position.y = 4.75;
+      coneTop.material = leafMat;
+      coneTop.parent = tNode;
+      shadowGenerator.addShadowCaster(coneTop);
+
+      addBoxCollider(tx, tz, 1.1, 1.1);
+    });
+
+    /**
+     * 5. SEMI-REALISTIC ANATOMICAL 3D CHARACTER BUILDER (BABYLON.JS)
+     */
+    function createFaceExpressionTexture(idPrefix, isFemale) {
+      const tex = new BABYLON.DynamicTexture(`${idPrefix}_faceTex`, { width: 256, height: 256 }, scene, true);
+      const ctx = tex.getContext();
+
+      // Warna dasar kulit seragam
+      ctx.fillStyle = "#F7C59F";
+      ctx.fillRect(0, 0, 256, 256);
+
+      // Balik sumbu Y canvas agar sesuai dengan pemetaan UV sphere Babylon.js (atas = y kecil)
+      ctx.save();
+      ctx.translate(0, 256);
+      ctx.scale(1, -1);
+
+      // Alis ditempatkan DI ATAS mata
+      ctx.strokeStyle = "#1E293B";
+      ctx.lineWidth = isFemale ? 3.8 : 4.6;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(82, 102);
+      ctx.quadraticCurveTo(96, 95, 110, 101);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(146, 101);
+      ctx.quadraticCurveTo(160, 95, 174, 102);
+      ctx.stroke();
+
+      // Mata proporsional
+      [96, 160].forEach((ex) => {
+        ctx.fillStyle = "#FFFFFF";
+        ctx.beginPath();
+        ctx.ellipse(ex, 122, 9.5, 7.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "#1E293B";
+        ctx.beginPath();
+        ctx.arc(ex, 122, 5.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "#090D16";
+        ctx.beginPath();
+        ctx.arc(ex, 122, 2.6, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "#FFFFFF";
+        ctx.beginPath();
+        ctx.arc(ex - 1.8, 119.5, 1.7, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // Rona pipi ditempatkan DI BAWAH sudut mata
+      ctx.fillStyle = "rgba(244, 114, 182, 0.25)";
+      ctx.beginPath();
+      ctx.ellipse(84, 144, 12, 7.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(172, 144, 12, 7.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Senyum ramah di bawah hidung
+      ctx.strokeStyle = "#9A3412";
+      ctx.lineWidth = 4.0;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.arc(128, 158, 15, 0.18 * Math.PI, 0.82 * Math.PI);
+      ctx.stroke();
+
+      ctx.restore();
+      tex.update();
+      return tex;
+    }
+
+    function createAnatomicalCharacter(idPrefix, options) {
+      const {
+        gender = "male",
+        isTeacher = false,
+        shirtHex = "#F5F5F5",
+        bottomHex = "#555B65",
+        shoeHex = "#202124",
+        hijabHex = "#F5F5F5",
+        hairHex = "#1E293B"
+      } = options;
+
+      const isFemale = gender === "female";
+      const isHijab = isFemale;
+
+      const root = new BABYLON.TransformNode(`${idPrefix}_root`, scene);
+      root.position.y = 0.04;
+
+      const skinMat = new BABYLON.PBRMaterial(`${idPrefix}_skinMat`, scene);
+      skinMat.albedoColor = BABYLON.Color3.FromHexString("#F7C59F");
+      skinMat.metallic = 0.0;
+      skinMat.roughness = 0.72;
+
+      const faceMat = new BABYLON.PBRMaterial(`${idPrefix}_faceMat`, scene);
+      faceMat.albedoTexture = createFaceExpressionTexture(idPrefix, isFemale);
+      faceMat.metallic = 0.0;
+      faceMat.roughness = 0.7;
+
+      const shirtMat = new BABYLON.PBRMaterial(`${idPrefix}_shirtMat`, scene);
+      shirtMat.albedoColor = BABYLON.Color3.FromHexString(shirtHex);
+      shirtMat.metallic = 0.0;
+      shirtMat.roughness = 0.86;
+
+      const bottomMat = new BABYLON.PBRMaterial(`${idPrefix}_bottomMat`, scene);
+      bottomMat.albedoColor = BABYLON.Color3.FromHexString(bottomHex);
+      bottomMat.metallic = 0.0;
+      bottomMat.roughness = 0.88;
+
+      const shoeMat = new BABYLON.PBRMaterial(`${idPrefix}_shoeMat`, scene);
+      shoeMat.albedoColor = BABYLON.Color3.FromHexString(shoeHex);
+      shoeMat.metallic = 0.05;
+      shoeMat.roughness = 0.65;
+
+      const hijabMat = new BABYLON.PBRMaterial(`${idPrefix}_hijabMat`, scene);
+      hijabMat.albedoColor = BABYLON.Color3.FromHexString(hijabHex);
+      hijabMat.metallic = 0.0;
+      hijabMat.roughness = 0.86;
+
+      const hairMat = new BABYLON.PBRMaterial(`${idPrefix}_hairMat`, scene);
+      hairMat.albedoColor = BABYLON.Color3.FromHexString(hairHex);
+      hairMat.metallic = 0.0;
+      hairMat.roughness = 0.8;
+
+      // 1. Torso & Smooth Shoulder Yoke
+      const torsoUpper = BABYLON.MeshBuilder.CreateCylinder(`${idPrefix}_torsoUp`, {
+        diameterTop: isFemale ? 0.64 : 0.72,
+        diameterBottom: isFemale ? 0.52 : 0.60,
+        height: 0.56,
+        tessellation: 18
+      }, scene);
+      torsoUpper.position.y = 1.36;
+      torsoUpper.scaling = new BABYLON.Vector3(1.0, 1.0, 0.64);
+      torsoUpper.material = shirtMat;
+      torsoUpper.parent = root;
+      shadowGenerator.addShadowCaster(torsoUpper);
+
+      const torsoLower = BABYLON.MeshBuilder.CreateCylinder(`${idPrefix}_torsoLow`, {
+        diameterTop: isFemale ? 0.52 : 0.60,
+        diameterBottom: isFemale ? 0.58 : 0.62,
+        height: 0.34,
+        tessellation: 18
+      }, scene);
+      torsoLower.position.y = 0.94;
+      torsoLower.scaling = new BABYLON.Vector3(1.0, 1.0, 0.65);
+      torsoLower.material = shirtMat;
+      torsoLower.parent = root;
+      shadowGenerator.addShadowCaster(torsoLower);
+
+      const shoulderYoke = BABYLON.MeshBuilder.CreateCylinder(`${idPrefix}_shoulder`, {
+        diameter: 0.22,
+        height: isFemale ? 0.74 : 0.84,
+        tessellation: 16
+      }, scene);
+      shoulderYoke.rotation.z = Math.PI / 2;
+      shoulderYoke.position.set(0, 1.56, 0);
+      shoulderYoke.material = shirtMat;
+      shoulderYoke.parent = root;
+      shadowGenerator.addShadowCaster(shoulderYoke);
+
+      const badgeMat = new BABYLON.StandardMaterial(`${idPrefix}_badgeMat`, scene);
+      badgeMat.diffuseColor = BABYLON.Color3.FromHexString(isTeacher ? "#F59E0B" : "#1D4ED8");
+      const badge = BABYLON.MeshBuilder.CreateBox(`${idPrefix}_badge`, { width: 0.11, height: 0.08, depth: 0.03 }, scene);
+      badge.position.set(isFemale ? 0.16 : 0.19, 1.44, isFemale ? 0.20 : 0.23);
+      badge.material = badgeMat;
+      badge.parent = root;
+
+      // Crisp Shirt Collar & School Tie / Teacher Scarf Detail
+      const collarMat = new BABYLON.PBRMaterial(`${idPrefix}_collarMat`, scene);
+      collarMat.albedoColor = BABYLON.Color3.FromHexString(isTeacher ? "#FEF3C7" : "#FFFFFF");
+      collarMat.roughness = 0.75;
+      const collar = BABYLON.MeshBuilder.CreateTorus(`${idPrefix}_collar`, { diameter: 0.27, thickness: 0.045, tessellation: 18 }, scene);
+      collar.position.set(0, 1.63, 0.01);
+      collar.rotation.x = 0.18;
+      collar.material = collarMat;
+      collar.parent = root;
+
+      if (!isTeacher) {
+        const tieMat = new BABYLON.PBRMaterial(`${idPrefix}_tieMat`, scene);
+        tieMat.albedoColor = BABYLON.Color3.FromHexString("#1E3A8A");
+        tieMat.roughness = 0.65;
+        const tieKnot = BABYLON.MeshBuilder.CreateBox(`${idPrefix}_tieKnot`, { width: 0.065, height: 0.065, depth: 0.05 }, scene);
+        tieKnot.position.set(0, 1.56, isFemale ? 0.19 : 0.22);
+        tieKnot.material = tieMat;
+        tieKnot.parent = root;
+
+        const tieBlade = BABYLON.MeshBuilder.CreateBox(`${idPrefix}_tieBlade`, { width: 0.075, height: 0.30, depth: 0.03 }, scene);
+        tieBlade.position.set(0, 1.38, isFemale ? 0.195 : 0.225);
+        tieBlade.material = tieMat;
+        tieBlade.parent = root;
+
+        // Waist Belt with Metallic Buckle
+        const beltMat = new BABYLON.PBRMaterial(`${idPrefix}_beltMat`, scene);
+        beltMat.albedoColor = BABYLON.Color3.FromHexString("#0F172A");
+        beltMat.roughness = 0.5;
+        const belt = BABYLON.MeshBuilder.CreateCylinder(`${idPrefix}_belt`, {
+          diameterTop: isFemale ? 0.54 : 0.61,
+          diameterBottom: isFemale ? 0.55 : 0.62,
+          height: 0.07,
+          tessellation: 18
+        }, scene);
+        belt.position.y = 0.80;
+        belt.scaling = new BABYLON.Vector3(1.0, 1.0, 0.66);
+        belt.material = beltMat;
+        belt.parent = root;
+
+        // Student Backpack on Back
+        const bagMat = new BABYLON.PBRMaterial(`${idPrefix}_bagMat`, scene);
+        bagMat.albedoColor = BABYLON.Color3.FromHexString(isFemale ? "#0284C7" : "#1E293B");
+        bagMat.roughness = 0.72;
+        const backpack = BABYLON.MeshBuilder.CreateBox(`${idPrefix}_backpack`, { width: 0.38, height: 0.46, depth: 0.18 }, scene);
+        backpack.position.set(0, 1.28, -0.24);
+        backpack.material = bagMat;
+        backpack.parent = root;
+        shadowGenerator.addShadowCaster(backpack);
+      }
+
+      // 2. Neck
+      const neck = BABYLON.MeshBuilder.CreateCylinder(`${idPrefix}_neck`, {
+        diameterTop: 0.21,
+        diameterBottom: 0.24,
+        height: 0.22,
+        tessellation: 14
+      }, scene);
+      neck.position.y = 1.72;
+      neck.material = isHijab ? hijabMat : skinMat;
+      neck.parent = root;
+
+      // 3. Head Group (Natural Oval / Elongated Head)
+      const headGroup = new BABYLON.TransformNode(`${idPrefix}_headGroup`, scene);
+      headGroup.position = new BABYLON.Vector3(0, 2.05, 0);
+      headGroup.parent = root;
+
+      // Single unified head mesh rotated so front texture faces +Z and UV seam stays at -Z
+      const faceMask = BABYLON.MeshBuilder.CreateSphere(`${idPrefix}_faceMask`, {
+        diameterX: 0.48,
+        diameterY: 0.56,
+        diameterZ: 0.50,
+        segments: 24
+      }, scene);
+      faceMask.rotation.y = Math.PI / 2;
+      faceMask.material = faceMat;
+      faceMask.parent = headGroup;
+      shadowGenerator.addShadowCaster(faceMask);
+
+      const nose = BABYLON.MeshBuilder.CreateSphere(`${idPrefix}_nose`, {
+        diameterX: 0.036,
+        diameterY: 0.052,
+        diameterZ: 0.034,
+        segments: 10
+      }, scene);
+      nose.position = new BABYLON.Vector3(0, -0.015, 0.246);
+      nose.material = skinMat;
+      nose.parent = headGroup;
+
+      if (isHijab) {
+        // Kubah hijab mulus membingkai kepala tanpa tonjolan silinder di dahi
+        const hijabBackHood = BABYLON.MeshBuilder.CreateSphere(`${idPrefix}_hijabHood`, {
+          diameterX: 0.54,
+          diameterY: 0.60,
+          diameterZ: 0.55,
+          segments: 22
+        }, scene);
+        hijabBackHood.position.set(0, 0.025, -0.055);
+        hijabBackHood.material = hijabMat;
+        hijabBackHood.parent = headGroup;
+        shadowGenerator.addShadowCaster(hijabBackHood);
+
+        const hijabBun = BABYLON.MeshBuilder.CreateSphere(`${idPrefix}_hijabBun`, {
+          diameter: 0.24,
+          segments: 14
+        }, scene);
+        hijabBun.position.set(0, 0.02, -0.31);
+        hijabBun.material = hijabMat;
+        hijabBun.parent = headGroup;
+
+        const chinWrap = BABYLON.MeshBuilder.CreateCylinder(`${idPrefix}_chinWrap`, {
+          diameterTop: 0.34,
+          diameterBottom: 0.38,
+          height: 0.16,
+          tessellation: 16
+        }, scene);
+        chinWrap.position.set(0, -0.26, -0.02);
+        chinWrap.material = hijabMat;
+        chinWrap.parent = headGroup;
+
+        const frontDrape = BABYLON.MeshBuilder.CreateCylinder(`${idPrefix}_frontDrape`, {
+          diameterTop: 0.42,
+          diameterBottom: 0.64,
+          height: 0.46,
+          tessellation: 18
+        }, scene);
+        frontDrape.position.set(0, 1.54, 0.02);
+        frontDrape.scaling = new BABYLON.Vector3(1.0, 1.0, 0.72);
+        frontDrape.material = hijabMat;
+        frontDrape.parent = root;
+        shadowGenerator.addShadowCaster(frontDrape);
+      } else {
+        // Rambut pendek laki-laki (atas, tengkuk belakang, jambang samping & telinga) tanpa lapisan coklat muda
+        const hairCrown = BABYLON.MeshBuilder.CreateSphere(`${idPrefix}_hairCrown`, {
+          diameterX: 0.505,
+          diameterY: 0.34,
+          diameterZ: 0.525,
+          segments: 18
+        }, scene);
+        hairCrown.position.set(0, 0.155, -0.015);
+        hairCrown.material = hairMat;
+        hairCrown.parent = headGroup;
+        shadowGenerator.addShadowCaster(hairCrown);
+
+        const hairBack = BABYLON.MeshBuilder.CreateSphere(`${idPrefix}_hairBack`, {
+          diameterX: 0.495,
+          diameterY: 0.48,
+          diameterZ: 0.46,
+          segments: 18
+        }, scene);
+        hairBack.position.set(0, 0.03, -0.065);
+        hairBack.material = hairMat;
+        hairBack.parent = headGroup;
+        shadowGenerator.addShadowCaster(hairBack);
+
+        [-1, 1].forEach((sideSign, idx) => {
+          const sideburn = BABYLON.MeshBuilder.CreateBox(`${idPrefix}_sideburn_${idx}`, {
+            width: 0.035,
+            height: 0.14,
+            depth: 0.09
+          }, scene);
+          sideburn.position.set(sideSign * 0.232, 0.04, 0.015);
+          sideburn.material = hairMat;
+          sideburn.parent = headGroup;
+
+          const ear = BABYLON.MeshBuilder.CreateSphere(`${idPrefix}_ear_${idx}`, {
+            diameterX: 0.045,
+            diameterY: 0.095,
+            diameterZ: 0.075,
+            segments: 10
+          }, scene);
+          ear.position.set(sideSign * 0.242, -0.01, -0.01);
+          ear.material = skinMat;
+          ear.parent = headGroup;
+        });
+      }
+
+      // 4. Arms with Articulated Elbow Joint & Detailed Hands
+      function buildArmWithHand(sideSign, sideName) {
+        const armPivot = new BABYLON.TransformNode(`${idPrefix}_armPivot_${sideName}`, scene);
+        armPivot.position = new BABYLON.Vector3(sideSign * (isFemale ? 0.37 : 0.42), 1.56, 0);
+        armPivot.parent = root;
+
+        const shoulderCap = BABYLON.MeshBuilder.CreateSphere(`${idPrefix}_shCap_${sideName}`, {
+          diameter: 0.21,
+          segments: 12
+        }, scene);
+        shoulderCap.position.y = 0.0;
+        shoulderCap.material = shirtMat;
+        shoulderCap.parent = armPivot;
+
+        const upperSleeve = BABYLON.MeshBuilder.CreateCylinder(`${idPrefix}_uArm_${sideName}`, {
+          diameterTop: 0.20,
+          diameterBottom: 0.165,
+          height: 0.34,
+          tessellation: 14
+        }, scene);
+        upperSleeve.position.y = -0.17;
+        upperSleeve.material = shirtMat;
+        upperSleeve.parent = armPivot;
+        shadowGenerator.addShadowCaster(upperSleeve);
+
+        const elbowPivot = new BABYLON.TransformNode(`${idPrefix}_elbowPivot_${sideName}`, scene);
+        elbowPivot.position = new BABYLON.Vector3(0, -0.34, 0);
+        elbowPivot.rotation.x = -0.22;
+        elbowPivot.parent = armPivot;
+
+        const elbowCap = BABYLON.MeshBuilder.CreateSphere(`${idPrefix}_elCap_${sideName}`, {
+          diameter: 0.165,
+          segments: 10
+        }, scene);
+        elbowCap.material = isHijab ? shirtMat : skinMat;
+        elbowCap.parent = elbowPivot;
+
+        const foreArm = BABYLON.MeshBuilder.CreateCylinder(`${idPrefix}_fArm_${sideName}`, {
+          diameterTop: 0.16,
+          diameterBottom: 0.125,
+          height: 0.33,
+          tessellation: 14
+        }, scene);
+        foreArm.position.y = -0.165;
+        foreArm.material = isHijab ? shirtMat : skinMat;
+        foreArm.parent = elbowPivot;
+        shadowGenerator.addShadowCaster(foreArm);
+
+        const palm = BABYLON.MeshBuilder.CreateBox(`${idPrefix}_palm_${sideName}`, {
+          width: 0.065,
+          height: 0.11,
+          depth: 0.11
+        }, scene);
+        palm.position.y = -0.37;
+        palm.material = skinMat;
+        palm.parent = elbowPivot;
+
+        const thumb = BABYLON.MeshBuilder.CreateCylinder(`${idPrefix}_thumb_${sideName}`, {
+          diameter: 0.026,
+          height: 0.065,
+          tessellation: 8
+        }, scene);
+        thumb.position.set(-sideSign * 0.015, -0.365, 0.062);
+        thumb.rotation.x = 0.55;
+        thumb.material = skinMat;
+        thumb.parent = elbowPivot;
+
+        [0.036, 0.012, -0.012, -0.036].forEach((fz, fi) => {
+          const fingerLengths = [0.068, 0.076, 0.072, 0.058];
+          const finger = BABYLON.MeshBuilder.CreateCylinder(`${idPrefix}_f_${sideName}_${fi}`, {
+            diameter: 0.021,
+            height: fingerLengths[fi],
+            tessellation: 8
+          }, scene);
+          finger.position.set(0, -0.42 - fingerLengths[fi] * 0.35, fz);
+          finger.rotation.z = -sideSign * 0.12;
+          finger.material = skinMat;
+          finger.parent = elbowPivot;
+        });
+
+        return { armPivot, elbowPivot };
+      }
+
+      const leftArmRig = buildArmWithHand(-1, "L");
+      const rightArmRig = buildArmWithHand(1, "R");
+      const leftArmPivot = leftArmRig.armPivot;
+      const rightArmPivot = rightArmRig.armPivot;
+      const leftElbowPivot = leftArmRig.elbowPivot;
+      const rightElbowPivot = rightArmRig.elbowPivot;
+
+      // 5. Legs with Articulated Knee Joint, Skirt (for female) & Shoes
+      if (isFemale) {
+        const longSkirt = BABYLON.MeshBuilder.CreateCylinder(`${idPrefix}_skirt`, {
+          diameterTop: 0.56,
+          diameterBottom: 0.72,
+          height: 0.72,
+          tessellation: 20
+        }, scene);
+        longSkirt.position.y = 0.44;
+        longSkirt.scaling = new BABYLON.Vector3(1.0, 1.0, 0.76);
+        longSkirt.material = bottomMat;
+        longSkirt.parent = root;
+        shadowGenerator.addShadowCaster(longSkirt);
+      }
+
+      const leftLegPivot = new BABYLON.TransformNode(`${idPrefix}_legPivot_L`, scene);
+      leftLegPivot.position = new BABYLON.Vector3(-0.16, 0.78, 0);
+      leftLegPivot.parent = root;
+
+      const rightLegPivot = new BABYLON.TransformNode(`${idPrefix}_legPivot_R`, scene);
+      rightLegPivot.position = new BABYLON.Vector3(0.16, 0.78, 0);
+      rightLegPivot.parent = root;
+
+      function buildLegWithKnee(hipPivot, name) {
+        const thighMesh = BABYLON.MeshBuilder.CreateCylinder(`${idPrefix}_thigh_${name}`, {
+          diameterTop: 0.22,
+          diameterBottom: 0.185,
+          height: 0.35,
+          tessellation: 14
+        }, scene);
+        thighMesh.position.y = -0.175;
+        thighMesh.material = bottomMat;
+        thighMesh.parent = hipPivot;
+        shadowGenerator.addShadowCaster(thighMesh);
+
+        const kneePivot = new BABYLON.TransformNode(`${idPrefix}_kneePivot_${name}`, scene);
+        kneePivot.position = new BABYLON.Vector3(0, -0.35, 0);
+        kneePivot.parent = hipPivot;
+
+        const kneeCap = BABYLON.MeshBuilder.CreateSphere(`${idPrefix}_kneeCap_${name}`, {
+          diameter: 0.185,
+          segments: 10
+        }, scene);
+        kneeCap.material = bottomMat;
+        kneeCap.parent = kneePivot;
+
+        const calfMesh = BABYLON.MeshBuilder.CreateCylinder(`${idPrefix}_calf_${name}`, {
+          diameterTop: 0.18,
+          diameterBottom: 0.15,
+          height: 0.34,
+          tessellation: 14
+        }, scene);
+        calfMesh.position.y = -0.17;
+        calfMesh.material = bottomMat;
+        calfMesh.parent = kneePivot;
+        shadowGenerator.addShadowCaster(calfMesh);
+
+        const shoe = BABYLON.MeshBuilder.CreateBox(`${idPrefix}_shoe_${name}`, {
+          width: 0.18,
+          height: 0.11,
+          depth: 0.30
+        }, scene);
+        shoe.position = new BABYLON.Vector3(0, -0.37, 0.05);
+        shoe.material = shoeMat;
+        shoe.parent = kneePivot;
+        shadowGenerator.addShadowCaster(shoe);
+
+        return kneePivot;
+      }
+
+      const leftKneePivot = buildLegWithKnee(leftLegPivot, "L");
+      const rightKneePivot = buildLegWithKnee(rightLegPivot, "R");
+
+      return {
+        root,
+        headGroup,
+        leftArmPivot,
+        rightArmPivot,
+        leftElbowPivot,
+        rightElbowPivot,
+        leftLegPivot,
+        rightLegPivot,
+        leftKneePivot,
+        rightKneePivot
+      };
+    }
+
+    /**
+     * 6. SPAWN PLAYER, IBU RIA (MAIN NPC) & DYNAMIC 3D OPEN BOOK SYMBOLS
+     */
+    const worldLabelsLayer = document.getElementById('world-labels-layer');
+
+    let player = createAnatomicalCharacter("player", {
+      gender: "male",
+      shirtHex: "#F5F5F5",
+      bottomHex: "#555B65",
+      shoeHex: "#202124"
+    });
+    player.root.position = new BABYLON.Vector3(0, 0.04, 12);
+    player.root.rotation.y = Math.PI;
+
+    function rebuildPlayerAvatar(gender) {
+      const oldPos = player.root.position.clone();
+      const oldRotY = player.root.rotation.y;
+      player.root.dispose();
+
+      player = createAnatomicalCharacter("player", {
+        gender: gender,
+        shirtHex: "#F5F5F5",
+        bottomHex: "#555B65",
+        shoeHex: "#202124",
+        hijabHex: "#F5F5F5"
+      });
+      player.root.position = oldPos;
+      player.root.rotation.y = oldRotY;
+    }
+
+    document.querySelectorAll('input[name="avatar-gender"]').forEach((radio) => {
+      radio.addEventListener('change', (e) => {
+        gameState.avatarGender = e.target.value;
+        rebuildPlayerAvatar(e.target.value);
+      });
+    });
+
+    // Ibu Ria (Seragam Guru PNS Khaki Autentik #A6895B / #856A40)
+    const IBU_RIA_CONFIG = {
+      name: "Ibu Ria",
+      role: "Guru Pembimbing Bisnis Digital",
+      position: { x: 0, z: -13.5 },
+      rotationY: 0
+    };
+
+    const ibuRiaChar = createAnatomicalCharacter("iburia", {
+      gender: "female",
+      isTeacher: true,
+      shirtHex: "#A6895B",
+      bottomHex: "#856A40",
+      hijabHex: "#A6895B",
+      shoeHex: "#202124"
+    });
+    ibuRiaChar.root.position = new BABYLON.Vector3(IBU_RIA_CONFIG.position.x, 0.04, IBU_RIA_CONFIG.position.z);
+    ibuRiaChar.root.rotation.y = IBU_RIA_CONFIG.rotationY;
+
+    const ibuRiaRingMat = new BABYLON.StandardMaterial("ibuRiaRingMat", scene);
+    ibuRiaRingMat.diffuseColor = BABYLON.Color3.FromHexString("#FBBF24");
+    ibuRiaRingMat.emissiveColor = BABYLON.Color3.FromHexString("#D97706");
+    const ibuRiaRing = BABYLON.MeshBuilder.CreateTorus("ibuRiaRing", { diameter: 2.5, thickness: 0.09, tessellation: 36 }, scene);
+    ibuRiaRing.position = new BABYLON.Vector3(IBU_RIA_CONFIG.position.x, 0.08, IBU_RIA_CONFIG.position.z);
+    ibuRiaRing.material = ibuRiaRingMat;
+
+    const ibuRiaBeaconMat = new BABYLON.StandardMaterial("ibuRiaBeaconMat", scene);
+    ibuRiaBeaconMat.diffuseColor = BABYLON.Color3.FromHexString("#FBBF24");
+    ibuRiaBeaconMat.emissiveColor = BABYLON.Color3.FromHexString("#D97706");
+    const ibuRiaBeacon = BABYLON.MeshBuilder.CreatePolyhedron("ibuRiaBeacon", { type: 1, size: 0.28 }, scene);
+    ibuRiaBeacon.position = new BABYLON.Vector3(IBU_RIA_CONFIG.position.x, 2.95, IBU_RIA_CONFIG.position.z);
+    ibuRiaBeacon.material = ibuRiaBeaconMat;
+
+    const ibuRiaLabelEl = document.createElement('div');
+    ibuRiaLabelEl.className = "absolute top-0 left-0 transition-opacity duration-150";
+    ibuRiaLabelEl.innerHTML = `
+      <div class="bg-slate-900/90 backdrop-blur-sm text-white px-3 py-1.5 rounded-xl border border-amber-400/50 shadow-lg text-center whitespace-nowrap">
+        <div class="text-xs font-extrabold leading-tight">Ibu Ria</div>
+        <div class="text-[10px] font-semibold text-amber-300 leading-tight">Guru Pembimbing</div>
+        <span id="iburia-status-pill" class="inline-block mt-1 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/40">
+          Temui untuk Mulai
+        </span>
+      </div>
+    `;
+    worldLabelsLayer.appendChild(ibuRiaLabelEl);
+
+    // Dynamic 3D Open Book Symbols Builder (1 Buku Terbuka ke Atas, Dibedakan Warna per Buku)
+    let bookEntities = [];
+    const BOOK_THEME_PALETTE = [
+      { coverHex: "#1D4ED8", ringHex: "#3B82F6", emissiveHex: "#1E40AF" }, // Buku 1: Biru Kerajaan
+      { coverHex: "#059669", ringHex: "#10B981", emissiveHex: "#047857" }, // Buku 2: Hijau Zamrud
+      { coverHex: "#7C3AED", ringHex: "#8B5CF6", emissiveHex: "#5B21B6" }, // Buku 3: Ungu Indigo
+      { coverHex: "#D97706", ringHex: "#F59E0B", emissiveHex: "#B45309" }, // Buku 4: Amber Emas
+      { coverHex: "#DB2777", ringHex: "#EC4899", emissiveHex: "#9D174D" }, // Buku 5: Magenta
+      { coverHex: "#0891B2", ringHex: "#06B6D4", emissiveHex: "#0E7490" }  // Buku 6: Cyan
+    ];
+
+    function createOpenBookMesh(prefix, coverMat, pageMat, goldMat) {
+      const bookNode = new BABYLON.TransformNode(`${prefix}_book`, scene);
+
+      const spine = BABYLON.MeshBuilder.CreateCylinder(`${prefix}_spine`, { diameter: 0.14, height: 1.05, tessellation: 12 }, scene);
+      spine.rotation.x = Math.PI / 2;
+      spine.position.y = -0.04;
+      spine.material = goldMat;
+      spine.parent = bookNode;
+
+      const leftPivot = new BABYLON.TransformNode(`${prefix}_lPivot`, scene);
+      leftPivot.rotation.z = -0.34;
+      leftPivot.parent = bookNode;
+
+      const leftCover = BABYLON.MeshBuilder.CreateBox(`${prefix}_lCov`, { width: 0.72, height: 0.05, depth: 1.05 }, scene);
+      leftCover.position.set(-0.36, -0.02, 0);
+      leftCover.material = coverMat;
+      leftCover.parent = leftPivot;
+
+      const leftPage = BABYLON.MeshBuilder.CreateBox(`${prefix}_lPage`, { width: 0.66, height: 0.06, depth: 0.96 }, scene);
+      leftPage.position.set(-0.34, 0.03, 0);
+      leftPage.material = pageMat;
+      leftPage.parent = leftPivot;
+
+      const rightPivot = new BABYLON.TransformNode(`${prefix}_rPivot`, scene);
+      rightPivot.rotation.z = 0.34;
+      rightPivot.parent = bookNode;
+
+      const rightCover = BABYLON.MeshBuilder.CreateBox(`${prefix}_rCov`, { width: 0.72, height: 0.05, depth: 1.05 }, scene);
+      rightCover.position.set(0.36, -0.02, 0);
+      rightCover.material = coverMat;
+      rightCover.parent = rightPivot;
+
+      const rightPage = BABYLON.MeshBuilder.CreateBox(`${prefix}_rPage`, { width: 0.66, height: 0.06, depth: 0.96 }, scene);
+      rightPage.position.set(0.34, 0.03, 0);
+      rightPage.material = pageMat;
+      rightPage.parent = rightPivot;
+
+      return bookNode;
+    }
+
+    function rebuild3DBookEntities() {
+      bookEntities.forEach((ent) => {
+        ent.rootGroup.dispose();
+        ent.softLight.dispose();
+        if (ent.labelEl && ent.labelEl.parentNode) ent.labelEl.parentNode.removeChild(ent.labelEl);
+      });
+      bookEntities = [];
+
+      const pageMat = new BABYLON.PBRMaterial("bookPageMat", scene);
+      pageMat.albedoColor = BABYLON.Color3.FromHexString("#FFFBEB");
+      pageMat.metallic = 0.0;
+      pageMat.roughness = 0.8;
+
+      const goldMat = new BABYLON.PBRMaterial("bookGoldMat", scene);
+      goldMat.albedoColor = BABYLON.Color3.FromHexString("#F59E0B");
+      goldMat.metallic = 0.4;
+      goldMat.roughness = 0.35;
+
+      bookGroups.forEach((bookData, bIdx) => {
+        const theme = BOOK_THEME_PALETTE[bIdx % BOOK_THEME_PALETTE.length];
+
+        const coverMat = new BABYLON.PBRMaterial(`${bookData.id}_coverMat`, scene);
+        coverMat.albedoColor = BABYLON.Color3.FromHexString(theme.coverHex);
+        coverMat.metallic = 0.12;
+        coverMat.roughness = 0.55;
+
+        const rootGroup = new BABYLON.TransformNode(`${bookData.id}_grp`, scene);
+        rootGroup.position = new BABYLON.Vector3(bookData.position.x, 0.05, bookData.position.z);
+
+        const outerRingMat = new BABYLON.StandardMaterial(`${bookData.id}_ringMat`, scene);
+        outerRingMat.diffuseColor = BABYLON.Color3.FromHexString(theme.ringHex);
+        outerRingMat.emissiveColor = BABYLON.Color3.FromHexString(theme.emissiveHex);
+
+        const outerRing = BABYLON.MeshBuilder.CreateTorus(`${bookData.id}_ring`, {
+          diameter: 2.75,
+          thickness: 0.08,
+          tessellation: 40
+        }, scene);
+        outerRing.position.y = 0.05;
+        outerRing.material = outerRingMat;
+        outerRing.parent = rootGroup;
+
+        const softLight = new BABYLON.PointLight(`${bookData.id}_light`, new BABYLON.Vector3(bookData.position.x, 1.8, bookData.position.z), scene);
+        softLight.diffuse = BABYLON.Color3.FromHexString(theme.ringHex);
+        softLight.intensity = 0.42;
+        softLight.range = 6.5;
+
+        const booksHolder = new BABYLON.TransformNode(`${bookData.id}_holder`, scene);
+        booksHolder.position.y = 1.45;
+        booksHolder.rotation.x = 0.35;
+        booksHolder.parent = rootGroup;
+
+        const m = createOpenBookMesh(`${bookData.id}_m1`, coverMat, pageMat, goldMat);
+        m.scaling = new BABYLON.Vector3(0.95, 0.95, 0.95);
+        m.parent = booksHolder;
+
+        const labelEl = document.createElement('div');
+        labelEl.className = "absolute top-0 left-0 transition-opacity duration-150";
+        labelEl.innerHTML = `
+          <div class="bg-slate-900/90 backdrop-blur-sm text-white px-3 py-1.5 rounded-xl border border-white/25 shadow-lg text-center whitespace-nowrap">
+            <div class="text-xs font-extrabold leading-tight flex items-center justify-center gap-1.5">
+              <span class="w-2.5 h-2.5 rounded-full inline-block" style="background-color:${theme.ringHex}"></span>
+              <span>📘 ${bookData.title}</span>
+            </div>
+            <div class="text-[10px] font-semibold text-amber-300 leading-tight">${bookData.rangeLabel} (${bookData.questions.length} Soal)</div>
+            <span class="book-status-pill inline-block mt-1 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/40">
+              Belum Selesai
+            </span>
+          </div>
+        `;
+        worldLabelsLayer.appendChild(labelEl);
+
+        bookEntities.push({
+          data: bookData,
+          rootGroup,
+          booksHolder,
+          outerRingMat,
+          softLight,
+          labelEl
+        });
+      });
+    }
+
+    rebuild3DBookEntities();
+
+    /**
+     * 7. P2P CLASSROOM MULTIPLAYER (PEERJS WEBRTC + LOCAL TAB BROADCAST)
+     */
+    const remotePlayers = new Map();
+    let myPeer = null;
+    let myPeerId = `local_${Math.random().toString(36).substring(2, 10)}`;
+    const activeConnections = new Map();
+    let localBroadcastChannel = null;
+
+    function sanitizeRoomSlug(className) {
+      const clean = className.toLowerCase().replace(/[^a-z0-9]/g, '');
+      return clean || 'kelasumum';
+    }
+
+    function updateOnlineCountHUD() {
+      const countEl = document.getElementById('hud-mp-count');
+      if (countEl) {
+        countEl.textContent = `${remotePlayers.size + 1} Online`;
+      }
+    }
+
+    function spawnOrUpdateRemotePeer(peerId, data) {
+      if (!peerId || peerId === myPeerId) return;
+
+      let entry = remotePlayers.get(peerId);
+      if (!entry) {
+        const charObj = createAnatomicalCharacter(`peer_${peerId}`, {
+          gender: data.gender || "male",
+          shirtHex: "#F5F5F5",
+          bottomHex: "#555B65",
+          shoeHex: "#202124",
+          hijabHex: "#F5F5F5"
+        });
+        charObj.root.position = new BABYLON.Vector3(data.x || 0, 0.04, data.z || 10);
+        charObj.root.rotation.y = data.ry || 0;
+
+        const labelEl = document.createElement('div');
+        labelEl.className = "absolute top-0 left-0 pointer-events-none transition-opacity duration-150";
+        labelEl.innerHTML = `
+          <div class="bg-violet-950/85 backdrop-blur-sm text-white px-2.5 py-1 rounded-xl border border-violet-400/50 shadow-md text-center whitespace-nowrap">
+            <div class="text-[11px] font-bold leading-tight">${data.name || 'Teman Sekelas'}</div>
+            <div class="text-[9px] font-medium text-violet-300 leading-tight">${data.kelas || ''}</div>
+          </div>
+        `;
+        worldLabelsLayer.appendChild(labelEl);
+
+        entry = {
+          charObj,
+          labelEl,
+          targetPos: new BABYLON.Vector3(data.x || 0, 0.04, data.z || 10),
+          targetRotY: data.ry || 0,
+          isMoving: Boolean(data.moving),
+          lastSeen: Date.now()
+        };
+        remotePlayers.set(peerId, entry);
+        updateOnlineCountHUD();
+      } else {
+        entry.targetPos.set(data.x, 0.04, data.z);
+        entry.targetRotY = data.ry;
+        entry.isMoving = Boolean(data.moving);
+        entry.lastSeen = Date.now();
+      }
+    }
+
+    function removeRemotePeer(peerId) {
+      const entry = remotePlayers.get(peerId);
+      if (entry) {
+        entry.charObj.root.dispose();
+        if (entry.labelEl && entry.labelEl.parentNode) {
+          entry.labelEl.parentNode.removeChild(entry.labelEl);
+        }
+        remotePlayers.delete(peerId);
+        activeConnections.delete(peerId);
+        updateOnlineCountHUD();
+      }
+    }
+
+    function setupDataConnection(conn) {
+      if (!conn || conn.peer === myPeerId) return;
+      conn.on('open', () => {
+        activeConnections.set(conn.peer, conn);
+      });
+      conn.on('data', (msg) => {
+        if (msg && msg.type === 'state') {
+          spawnOrUpdateRemotePeer(conn.peer, msg);
+          if (Array.isArray(msg.knownPeers) && myPeer) {
+            msg.knownPeers.forEach((otherId) => {
+              if (otherId !== myPeerId && !activeConnections.has(otherId)) {
+                try {
+                  const newConn = myPeer.connect(otherId, { reliable: false });
+                  setupDataConnection(newConn);
+                } catch (e) {}
+              }
+            });
+          }
+        }
+      });
+      conn.on('close', () => removeRemotePeer(conn.peer));
+      conn.on('error', () => removeRemotePeer(conn.peer));
+    }
+
+    function initLocalTabSync(roomSlug) {
+      if (typeof BroadcastChannel === 'undefined') return;
+      try {
+        localBroadcastChannel = new BroadcastChannel(`smkn1cilegon_room_${roomSlug}`);
+        localBroadcastChannel.onmessage = (ev) => {
+          const msg = ev.data;
+          if (msg && msg.type === 'state' && msg.senderId && msg.senderId !== myPeerId) {
+            spawnOrUpdateRemotePeer(msg.senderId, msg);
+          } else if (msg && msg.type === 'bye' && msg.senderId) {
+            removeRemotePeer(msg.senderId);
+          }
+        };
+      } catch (e) {
+        localBroadcastChannel = null;
+      }
+    }
+
+    function isRestrictedPreviewHost() {
+      const host = window.location.hostname || "";
+      const proto = window.location.protocol || "";
+      return (
+        proto === "blob:" ||
+        proto === "about:" ||
+        host.includes("googleusercontent") ||
+        host.includes("scf.usercontent") ||
+        host.includes("webcontainer") ||
+        window.self !== window.top
+      );
+    }
+
+    function initClassroomMultiplayer(studentClass) {
+      const roomSlug = sanitizeRoomSlug(studentClass);
+      initLocalTabSync(roomSlug);
+
+      // Skip external PeerJS WebSocket when running inside strict sandboxed Canvas iframe
+      if (typeof Peer === 'undefined' || isRestrictedPreviewHost()) {
+        return;
+      }
+
+      const maxSlots = 20;
+      let attemptSlot = Math.floor(Math.random() * maxSlots) + 1;
+
+      function tryClaimSlot(slot, retriesLeft) {
+        if (retriesLeft <= 0) return;
+        const candidateId = `smkn1cilegon-${roomSlug}-s${slot}`;
+        let peer;
+        try {
+          peer = new Peer(candidateId, { debug: 0 });
+        } catch (err) {
+          return;
+        }
+
+        peer.on('open', (id) => {
+          myPeer = peer;
+          myPeerId = id;
+
+          // Connect to other active slots in the same classroom
+          for (let s = 1; s <= maxSlots; s++) {
+            const targetId = `smkn1cilegon-${roomSlug}-s${s}`;
+            if (targetId !== id) {
+              try {
+                const conn = peer.connect(targetId, { reliable: false });
+                setupDataConnection(conn);
+              } catch (e) {}
+            }
+          }
+        });
+
+        peer.on('connection', (conn) => {
+          setupDataConnection(conn);
+        });
+
+        peer.on('error', (err) => {
+          if (err && err.type === 'unavailable-id') {
+            try { peer.destroy(); } catch (e) {}
+            tryClaimSlot((slot % maxSlots) + 1, retriesLeft - 1);
+          }
+        });
+      }
+
+      try {
+        tryClaimSlot(attemptSlot, maxSlots);
+      } catch (e) {
+        // Fallback silently to local tab sync if WebSocket is blocked
+      }
+    }
+
+    window.addEventListener('beforeunload', () => {
+      if (localBroadcastChannel) {
+        try {
+          localBroadcastChannel.postMessage({ type: 'bye', senderId: myPeerId });
+        } catch (e) {}
+      }
+    });
+
+    let lastBroadcastTime = 0;
+    function broadcastMyState(isMoving) {
+      const now = performance.now();
+      if (now - lastBroadcastTime < 90) return;
+      lastBroadcastTime = now;
+
+      const knownPeers = Array.from(activeConnections.keys());
+      const packet = {
+        type: 'state',
+        senderId: myPeerId,
+        name: gameState.studentName,
+        kelas: gameState.studentClass,
+        gender: gameState.avatarGender,
+        x: Math.round(player.root.position.x * 100) / 100,
+        z: Math.round(player.root.position.z * 100) / 100,
+        ry: Math.round(player.root.rotation.y * 100) / 100,
+        moving: isMoving,
+        knownPeers
+      };
+
+      if (localBroadcastChannel) {
+        try { localBroadcastChannel.postMessage(packet); } catch (e) {}
+      }
+
+      if (myPeer && activeConnections.size > 0) {
+        activeConnections.forEach((conn) => {
+          if (conn.open) {
+            try { conn.send(packet); } catch (e) {}
+          }
+        });
+      }
+    }
+
+    /**
+     * 8. CAMERA & INPUT CONTROLS (MIRROR MOUSE ORBIT + WASD/ARROWS + TOUCH JOYSTICK)
+     */
+    const keys = { w: false, a: false, s: false, d: false, ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
+    let cameraYaw = 0;
+    let cameraPitch = 0.25;
+    let isDraggingCamera = false;
+    let prevPointerX = 0;
+    let prevPointerY = 0;
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key in keys) keys[e.key] = true;
+      const lower = e.key.toLowerCase();
+      if (lower in keys) keys[lower] = true;
+
+      if ((lower === 'e' || e.key === 'Enter') && gameState.isPlaying && !gameState.isModalOpen && gameState.nearbyTarget) {
+        triggerInteraction(gameState.nearbyTarget);
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      if (e.key in keys) keys[e.key] = false;
+      const lower = e.key.toLowerCase();
+      if (lower in keys) keys[lower] = false;
+    });
+
+    // Mirror / Reversed Drag Camera Rotation
+    canvas.addEventListener('pointerdown', (e) => {
+      if (!gameState.isPlaying || gameState.isModalOpen) return;
+      isDraggingCamera = true;
+      prevPointerX = e.clientX;
+      prevPointerY = e.clientY;
+    });
+
+    window.addEventListener('pointermove', (e) => {
+      if (!isDraggingCamera) return;
+      const dx = e.clientX - prevPointerX;
+      const dy = e.clientY - prevPointerY;
+      prevPointerX = e.clientX;
+      prevPointerY = e.clientY;
+
+      cameraYaw += dx * 0.0065;
+      cameraPitch = Math.max(-0.1, Math.min(0.85, cameraPitch - dy * 0.005));
+    });
+
+    window.addEventListener('pointerup', () => {
+      isDraggingCamera = false;
+    });
+
+    // Mobile Virtual Joystick
+    const joystickZone = document.getElementById('touch-joystick-zone');
+    const joystickKnob = document.getElementById('touch-joystick-knob');
+    const touchMove = { x: 0, z: 0 };
+    let joystickTouchId = null;
+
+    if (joystickZone) {
+      joystickZone.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        const touch = e.changedTouches[0];
+        joystickTouchId = touch.identifier;
+        updateJoystick(touch);
+      }, { passive: false });
+
+      joystickZone.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          if (e.changedTouches[i].identifier === joystickTouchId) {
+            updateJoystick(e.changedTouches[i]);
+          }
+        }
+      }, { passive: false });
+
+      const resetJoystick = (e) => {
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          if (e.changedTouches[i].identifier === joystickTouchId) {
+            joystickTouchId = null;
+            touchMove.x = 0;
+            touchMove.z = 0;
+            joystickKnob.style.transform = `translate(0px, 0px)`;
+          }
+        }
+      };
+      joystickZone.addEventListener('touchend', resetJoystick);
+      joystickZone.addEventListener('touchcancel', resetJoystick);
+    }
+
+    function updateJoystick(touch) {
+      const rect = joystickZone.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      const maxRadius = rect.width / 2 - 20;
+
+      let dx = touch.clientX - centerX;
+      let dy = touch.clientY - centerY;
+      const dist = Math.hypot(dx, dy);
+
+      if (dist > maxRadius) {
+        dx = (dx / dist) * maxRadius;
+        dy = (dy / dist) * maxRadius;
+      }
+
+      joystickKnob.style.transform = `translate(${dx}px, ${dy}px)`;
+      touchMove.x = dx / maxRadius;
+      touchMove.z = dy / maxRadius;
+    }
+
+    /**
+     * 9. TEACHER PANEL (PIN PROTECTED) & CSV/JSON QUESTION UPLOAD
+     */
+    const startModal = document.getElementById('start-modal');
+    const startForm = document.getElementById('start-form');
+    const startError = document.getElementById('start-error');
+    const hudOverlay = document.getElementById('hud-overlay');
+    const hudQuestBanner = document.getElementById('hud-quest-banner');
+    const interactionPrompt = document.getElementById('interaction-prompt');
+    const interactionText = document.getElementById('interaction-text');
+    const btnInteract = document.getElementById('btn-interact');
+
+    const btnOpenSheetSetup = document.getElementById('btn-open-sheet-setup');
+    const sheetSetupPanel = document.getElementById('sheet-setup-panel');
+    const teacherPinGate = document.getElementById('teacher-pin-gate');
+    const teacherUnlockedControls = document.getElementById('teacher-unlocked-controls');
+    const inputTeacherPin = document.getElementById('input-teacher-pin');
+    const btnVerifyPin = document.getElementById('btn-verify-pin');
+    const pinErrorMsg = document.getElementById('pin-error-msg');
+    const btnLockTeacher = document.getElementById('btn-lock-teacher');
+    const btnBackToStart = document.getElementById('btn-back-to-start');
+    const btnBackToStartBottom = document.getElementById('btn-back-to-start-bottom');
+
+    const inputSheetUrl = document.getElementById('input-sheet-url');
+    const btnSaveSheetUrl = document.getElementById('btn-save-sheet-url');
+    const sheetSetupFeedback = document.getElementById('sheet-setup-feedback');
+    const sheetStatusBadge = document.getElementById('sheet-status-badge');
+
+    const btnDownloadTemplate = document.getElementById('btn-download-template');
+    const inputUploadQuestions = document.getElementById('input-upload-questions');
+    const btnResetQuestions = document.getElementById('btn-reset-questions');
+    const questionBankStatus = document.getElementById('question-bank-status');
+    const inputNewPin = document.getElementById('input-new-pin');
+    const btnSaveNewPin = document.getElementById('btn-save-new-pin');
+
+    let isTeacherUnlocked = false;
+
+    function showTeacherFeedback(msg, isError = false) {
+      sheetSetupFeedback.textContent = msg;
+      sheetSetupFeedback.classList.remove('hidden', 'text-emerald-700', 'bg-emerald-50', 'border-emerald-200', 'text-red-700', 'bg-red-50', 'border-red-200');
+      if (isError) {
+        sheetSetupFeedback.classList.add('text-red-700', 'bg-red-50', 'border-red-200');
+      } else {
+        sheetSetupFeedback.classList.add('text-emerald-700', 'bg-emerald-50', 'border-emerald-200');
+      }
+    }
+
+    function refreshSheetStatusBadge() {
+      const activeUrl = resolveGoogleScriptUrl();
+      if (activeUrl) {
+        inputSheetUrl.value = activeUrl;
+        sheetStatusBadge.textContent = "Sheet Aktif ✓";
+        btnOpenSheetSetup.classList.remove("bg-white/15");
+        btnOpenSheetSetup.classList.add("bg-emerald-500/30", "border-emerald-300/50");
+      } else {
+        sheetStatusBadge.textContent = "Panel Guru";
+        btnOpenSheetSetup.classList.add("bg-white/15");
+        btnOpenSheetSetup.classList.remove("bg-emerald-500/30", "border-emerald-300/50");
+      }
+
+      const totalQ = activeQuestionBank.length;
+      const totalBooks = bookGroups.length;
+      const isCustom = Boolean(localStorage.getItem(STORAGE_KEY_CUSTOM_QUESTIONS));
+      questionBankStatus.innerHTML = `Bank Soal Aktif: <strong>${isCustom ? 'Upload Guru' : 'Permanen PKK Kelas XI'} (${totalQ} Soal → ${totalBooks} Simbol Buku)</strong>`;
+    }
+    refreshSheetStatusBadge();
+
+    function openTeacherPanelView() {
+      sheetSetupPanel.classList.remove('hidden');
+      startForm.classList.add('hidden');
+      sheetSetupFeedback.classList.add('hidden');
+      pinErrorMsg.classList.add('hidden');
+      if (!isTeacherUnlocked) {
+        teacherPinGate.classList.remove('hidden');
+        teacherUnlockedControls.classList.add('hidden');
+        inputTeacherPin.value = '';
+        inputTeacherPin.focus();
+      }
+    }
+
+    function closeTeacherPanelView() {
+      sheetSetupPanel.classList.add('hidden');
+      startForm.classList.remove('hidden');
+      sheetSetupFeedback.classList.add('hidden');
+      pinErrorMsg.classList.add('hidden');
+    }
+
+    btnOpenSheetSetup.addEventListener('click', () => {
+      if (sheetSetupPanel.classList.contains('hidden')) {
+        openTeacherPanelView();
+      } else {
+        closeTeacherPanelView();
+      }
+    });
+
+    btnBackToStart.addEventListener('click', closeTeacherPanelView);
+    btnBackToStartBottom.addEventListener('click', closeTeacherPanelView);
+
+    function verifyTeacherPin() {
+      if (inputTeacherPin.value.trim() === getTeacherPin()) {
+        isTeacherUnlocked = true;
+        pinErrorMsg.classList.add('hidden');
+        teacherPinGate.classList.add('hidden');
+        teacherUnlockedControls.classList.remove('hidden');
+        refreshSheetStatusBadge();
+      } else {
+        pinErrorMsg.classList.remove('hidden');
+      }
+    }
+
+    btnVerifyPin.addEventListener('click', verifyTeacherPin);
+    inputTeacherPin.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        verifyTeacherPin();
+      }
+    });
+
+    btnLockTeacher.addEventListener('click', () => {
+      isTeacherUnlocked = false;
+      teacherUnlockedControls.classList.add('hidden');
+      teacherPinGate.classList.remove('hidden');
+      inputTeacherPin.value = '';
+      closeTeacherPanelView();
+    });
+
+    btnSaveSheetUrl.addEventListener('click', () => {
+      const val = inputSheetUrl.value.trim();
+      if (!val) {
+        localStorage.removeItem(STORAGE_KEY_SHEET_URL);
+        refreshSheetStatusBadge();
+        showTeacherFeedback("Link Google Sheet telah dihapus.");
+        return;
+      }
+      if (!val.startsWith("https://script.google.com/")) {
+        showTeacherFeedback("❌ URL harus diawali dengan https://script.google.com/...", true);
+        return;
+      }
+      localStorage.setItem(STORAGE_KEY_SHEET_URL, val);
+      refreshSheetStatusBadge();
+      showTeacherFeedback("✅ URL Web App Google Sheet Guru berhasil disimpan!");
+    });
+
+    btnSaveNewPin.addEventListener('click', () => {
+      const newPin = inputNewPin.value.trim();
+      if (newPin.length < 4) {
+        showTeacherFeedback("❌ PIN baru minimal 4 karakter.", true);
+        return;
+      }
+      localStorage.setItem(STORAGE_KEY_TEACHER_PIN, newPin);
+      inputNewPin.value = '';
+      showTeacherFeedback("✅ PIN Guru berhasil diperbarui!");
+    });
+
+    function parseCsvLine(line, delimiter) {
+      const result = [];
+      let current = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === '"') {
+          if (inQuotes && line[i + 1] === '"') {
+            current += '"';
+            i++;
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (ch === delimiter && !inQuotes) {
+          result.push(current.trim());
+          current = '';
+        } else {
+          current += ch;
+        }
+      }
+      result.push(current.trim());
+      return result;
+    }
+
+    function parseUploadedCsvToBank(text) {
+      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      if (lines.length < 2) throw new Error("File CSV kosong atau tidak memiliki baris soal.");
+
+      const delimiter = lines[0].includes(';') ? ';' : ',';
+      const headerCols = parseCsvLine(lines[0], delimiter).map(h => h.toLowerCase());
+      const hasOptionE = headerCols.includes('opsi_e') || headerCols.includes('e');
+      const letterMap = { A: 0, B: 1, C: 2, D: 3, E: 4, '1': 0, '2': 1, '3': 2, '4': 3, '5': 4 };
+      const questions = [];
+
+      for (let i = 1; i < lines.length; i++) {
+        const cols = parseCsvLine(lines[i], delimiter);
+        if (cols.length < 7) continue;
+
+        const topic = cols[0] || "Mapel Ibu Ria";
+        const questionText = cols[1];
+        if (!questionText) continue;
+
+        const options = hasOptionE && cols[6]
+          ? [cols[2], cols[3], cols[4], cols[5], cols[6]]
+          : [cols[2], cols[3], cols[4], cols[5]];
+        const keyRaw = (hasOptionE ? (cols[7] || 'A') : (cols[6] || 'A')).toUpperCase().trim();
+        const explanationText = (hasOptionE ? cols[8] : cols[7]) || "Jawaban telah dicatat oleh sistem.";
+        const correctIdx = keyRaw in letterMap ? letterMap[keyRaw] : 0;
+
+        questions.push({
+          id: `Q${String(questions.length + 1).padStart(2, '0')}`,
+          topic: topic,
+          question: questionText,
+          options: options,
+          correctIndex: correctIdx,
+          explanation: explanationText
+        });
+      }
+
+      if (questions.length === 0) {
+        throw new Error("Tidak ada baris soal valid di dalam file CSV.");
+      }
+      return questions;
+    }
+
+    btnDownloadTemplate.addEventListener('click', () => {
+      const csvRows = [
+        ["topik", "pertanyaan", "opsi_a", "opsi_b", "opsi_c", "opsi_d", "kunci", "pembahasan"],
+        ["Digital Branding", "Apa tujuan utama membangun Brand Identity pada bisnis digital?", "Membedakan merek dan membangun kepercayaan konsumen", "Memperbesar ukuran file foto", "Menghindari pajak usaha", "Mengurangi jumlah karyawan"],
+        ["SEO & SEM", "Apa kepanjangan dari SEO dalam pemasaran digital?", "Search Engine Optimization", "Social Engagement Order", "Sales Executive Online", "System Enterprise Operation"],
+        ["Kewirausahaan", "Blok pada Business Model Canvas yang berisi manfaat utama produk adalah...", "Value Propositions", "Cost Structure", "Key Partners", "Channels"],
+        ["Social Media", "Bagian 3 detik pertama pada video TikTok/Reels untuk menarik perhatian disebut...", "Hook", "Caption", "Hashtag", "Bio Link"]
+      ];
+      const csvContent = csvRows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+      const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "Template_Bank_Soal_Buku_3D.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    inputUploadQuestions.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const content = ev.target.result;
+          let bank = [];
+
+          if (file.name.toLowerCase().endsWith('.json')) {
+            const json = JSON.parse(content);
+            if (Array.isArray(json)) {
+              json.forEach((item, idx) => {
+                if (item.question && Array.isArray(item.options)) {
+                  bank.push({
+                    id: item.id || `Q${String(idx + 1).padStart(2, '0')}`,
+                    topic: item.topic || item.role || "Bisnis Digital",
+                    question: item.question,
+                    options: item.options,
+                    correctIndex: typeof item.correctIndex === 'number' ? item.correctIndex : 0,
+                    explanation: item.explanation || "Jawaban telah dicatat oleh sistem."
+                  });
+                } else if (Array.isArray(item.questions)) {
+                  item.questions.forEach((q) => {
+                    bank.push({
+                      id: q.id || `Q${String(bank.length + 1).padStart(2, '0')}`,
+                      topic: item.role || q.topic || "Bisnis Digital",
+                      question: q.question,
+                      options: q.options,
+                      correctIndex: typeof q.correctIndex === 'number' ? q.correctIndex : 0,
+                      explanation: q.explanation || "Jawaban telah dicatat oleh sistem."
+                    });
+                  });
+                }
+              });
+            }
+          } else {
+            bank = parseUploadedCsvToBank(content);
+          }
+
+          if (bank.length === 0) throw new Error("Format soal tidak valid.");
+
+          localStorage.setItem(STORAGE_KEY_CUSTOM_QUESTIONS, JSON.stringify(bank));
+          loadQuestionBankFromStorage();
+          buildDynamicBookGroups();
+          rebuild3DBookEntities();
+          refreshSheetStatusBadge();
+          showTeacherFeedback(`✅ Berhasil memuat ${bank.length} soal menjadi ${bookGroups.length} Simbol Buku 3D!`);
+        } catch (err) {
+          showTeacherFeedback(`❌ Gagal memproses file: ${err.message}`, true);
+        } finally {
+          inputUploadQuestions.value = '';
+        }
+      };
+      reader.readAsText(file);
+    });
+
+    btnResetQuestions.addEventListener('click', () => {
+      localStorage.removeItem(STORAGE_KEY_CUSTOM_QUESTIONS);
+      loadQuestionBankFromStorage();
+      buildDynamicBookGroups();
+      rebuild3DBookEntities();
+      refreshSheetStatusBadge();
+      showTeacherFeedback(`✅ Bank soal dikembalikan ke soal bawaan (${activeQuestionBank.length} soal → ${bookGroups.length} Buku).`);
+    });
+
+    // Start Game Form Submit
+    startForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const nameVal = document.getElementById('input-name').value.trim();
+      const classVal = document.getElementById('input-class').value.trim();
+
+      if (!nameVal || !classVal) {
+        startError.classList.remove('hidden');
+        return;
+      }
+
+      startError.classList.add('hidden');
+      gameState.studentName = nameVal;
+      gameState.studentClass = classVal;
+      gameState.isPlaying = true;
+
+      document.getElementById('hud-student-name').textContent = nameVal;
+      document.getElementById('hud-student-class').textContent = classVal;
+      updateHUD();
+
+      sfx.init();
+      sfx.playInteract();
+      setTimeout(() => {
+        if (gameState.isPlaying) initClassroomMultiplayer(classVal);
+      }, 1200);
+
+      startModal.classList.add('hidden');
+      hudOverlay.classList.remove('hidden');
+    });
+
+    /**
+     * 10. HUD, PROXIMITY INTERACTION & IBU RIA DIALOG SYSTEM
+     */
+    const hudScore = document.getElementById('hud-score');
+    const hudProgress = document.getElementById('hud-progress');
+    const iburiaModal = document.getElementById('iburia-modal');
+    const iburiaDialogText = document.getElementById('iburia-dialog-text');
+    const iburiaBookCount = document.getElementById('iburia-book-count');
+    const iburiaQuestionCount = document.getElementById('iburia-question-count');
+    const iburiaIncompleteWarning = document.getElementById('iburia-incomplete-warning');
+    const btnIbuRiaClose = document.getElementById('btn-iburia-close');
+    const btnIbuRiaStartQuest = document.getElementById('btn-iburia-start-quest');
+    const btnIbuRiaCollect = document.getElementById('btn-iburia-collect');
+
+    function getTotalAnsweredCount() {
+      let count = 0;
+      bookGroups.forEach((b) => {
+        const rec = gameState.completedBooks[b.id];
+        if (rec && Array.isArray(rec.answers)) {
+          count += rec.answers.length;
+        }
+      });
+      return count;
+    }
+
+    function getCompletedBooksCount() {
+      return bookGroups.filter((b) => gameState.completedBooks[b.id]?.completed).length;
+    }
+
+    function updateHUD() {
+      const totalBooks = bookGroups.length;
+      const doneBooks = getCompletedBooksCount();
+      hudScore.textContent = Math.round(gameState.score);
+      hudProgress.textContent = `${doneBooks}/${totalBooks}`;
+
+      const ibuPill = document.getElementById('iburia-status-pill');
+      if (doneBooks >= totalBooks && totalBooks > 0) {
+        gameState.allBooksCompleted = true;
+        hudQuestBanner.innerHTML = "✅ Semua simbol buku selesai! Kembali ke <strong>Ibu Ria</strong> untuk mengumpulkan jawaban.";
+        hudQuestBanner.className = "mt-2.5 bg-emerald-50 border border-emerald-300 rounded-xl px-2.5 py-1.5 text-[11px] font-bold text-emerald-900 leading-snug";
+        if (ibuPill) {
+          ibuPill.textContent = "Siap Mengumpulkan!";
+          ibuPill.className = "inline-block mt-1 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-400/25 text-emerald-300 border border-emerald-400/50";
+        }
+      } else if (gameState.questStartedByIbuRia) {
+        hudQuestBanner.innerHTML = `📘 Jelajahi kampus & selesaikan seluruh simbol buku (${doneBooks}/${totalBooks} Buku).`;
+        hudQuestBanner.className = "mt-2.5 bg-blue-50 border border-blue-200 rounded-xl px-2.5 py-1.5 text-[11px] font-semibold text-blue-900 leading-snug";
+        if (ibuPill) {
+          ibuPill.textContent = "Sedang Bertugas";
+        }
+      } else {
+        hudQuestBanner.innerHTML = "🎯 Temui Ibu Ria di depan Gedung Utama untuk memulai petualangan!";
+      }
+
+      bookEntities.forEach((ent) => {
+        const pill = ent.labelEl.querySelector('.book-status-pill');
+        const isDone = Boolean(gameState.completedBooks[ent.data.id]?.completed);
+        if (pill) {
+          if (isDone) {
+            pill.textContent = "Selesai ✓";
+            pill.className = "book-status-pill inline-block mt-1 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-400/25 text-emerald-300 border border-emerald-400/50";
+          } else {
+            pill.textContent = "Belum Selesai";
+            pill.className = "book-status-pill inline-block mt-1 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/40";
+          }
+        }
+      });
+    }
+
+    function openIbuRiaDialog() {
+      gameState.isModalOpen = true;
+      sfx.playInteract();
+
+      const totalBooks = bookGroups.length;
+      const doneBooks = getCompletedBooksCount();
+      const totalQ = activeQuestionBank.length;
+      const answeredQ = getTotalAnsweredCount();
+
+      iburiaBookCount.textContent = `${doneBooks} / ${totalBooks} Buku`;
+      iburiaQuestionCount.textContent = `${answeredQ} / ${totalQ} Soal`;
+
+      if (doneBooks >= totalBooks && totalBooks > 0) {
+        iburiaDialogText.textContent = `Luar biasa, ${gameState.studentName}! Kamu telah menemukan seluruh simbol buku dan menjawab semua soal dengan tuntas. Klik tombol "Mengumpulkan" di bawah ini untuk menyerahkan jawabanmu kepada Ibu.`;
+        iburiaIncompleteWarning.classList.add('hidden');
+        btnIbuRiaStartQuest.classList.add('hidden');
+        btnIbuRiaCollect.classList.remove('hidden');
+      } else if (!gameState.questStartedByIbuRia) {
+        iburiaDialogText.textContent = `Selamat datang di Petualangan Digital, ${gameState.studentName}! Hari ini kamu akan menjelajahi dunia pembelajaran dan menyelesaikan tantangan yang tersedia. Temukan seluruh simbol buku (${totalBooks} buku), jawab semua soal, kemudian kembali kepada Ibu untuk mengumpulkan jawabanmu.`;
+        iburiaIncompleteWarning.classList.add('hidden');
+        btnIbuRiaStartQuest.classList.remove('hidden');
+        btnIbuRiaCollect.classList.add('hidden');
+      } else {
+        iburiaDialogText.textContent = `Semangat terus, ${gameState.studentName}! Kamu baru menyelesaikan ${doneBooks} dari ${totalBooks} simbol buku. Lanjutkan pencarian simbol buku yang tersisa di sekitar area kampus SMKN 1 Cilegon ya!`;
+        iburiaIncompleteWarning.classList.remove('hidden');
+        btnIbuRiaStartQuest.classList.add('hidden');
+        btnIbuRiaCollect.classList.add('hidden');
+      }
+
+      iburiaModal.classList.remove('hidden');
+    }
+
+    function closeIbuRiaDialog() {
+      iburiaModal.classList.add('hidden');
+      gameState.isModalOpen = false;
+    }
+
+    btnIbuRiaClose.addEventListener('click', closeIbuRiaDialog);
+    btnIbuRiaStartQuest.addEventListener('click', () => {
+      gameState.questStartedByIbuRia = true;
+      updateHUD();
+      closeIbuRiaDialog();
+      sfx.playCorrect();
+    });
+
+    btnIbuRiaCollect.addEventListener('click', () => {
+      iburiaModal.classList.add('hidden');
+      openFinalReportModal();
+    });
+
+    /**
+     * 11. BOOK QUIZ MODAL LOGIC
+     */
+    const quizModal = document.getElementById('quiz-modal');
+    const quizTopicBadge = document.getElementById('quiz-topic-badge');
+    const quizBookTitle = document.getElementById('quiz-book-title');
+    const quizQCounter = document.getElementById('quiz-q-counter');
+    const quizQuestionOriginId = document.getElementById('quiz-question-origin-id');
+    const quizQuestionTopic = document.getElementById('quiz-question-topic');
+    const quizQuestionText = document.getElementById('quiz-question-text');
+    const quizOptionsContainer = document.getElementById('quiz-options-container');
+    const quizFeedbackBox = document.getElementById('quiz-feedback-box');
+    const quizFeedbackTitle = document.getElementById('quiz-feedback-title');
+    const quizFeedbackDesc = document.getElementById('quiz-feedback-desc');
+    const btnCloseQuiz = document.getElementById('btn-close-quiz');
+    const btnNextQuestion = document.getElementById('btn-next-question');
+    const btnNextLabel = document.getElementById('btn-next-label');
+
+    function openBookQuiz(bookData) {
+      if (!gameState.questStartedByIbuRia) {
+        gameState.questStartedByIbuRia = true;
+      }
+
+      gameState.isModalOpen = true;
+      gameState.activeBookId = bookData.id;
+
+      if (!gameState.completedBooks[bookData.id]) {
+        gameState.completedBooks[bookData.id] = {
+          completed: false,
+          correctCount: 0,
+          answers: []
+        };
+      }
+
+      const record = gameState.completedBooks[bookData.id];
+      if (record.completed) {
+        gameState.activeQuestionIndex = 0;
+      } else {
+        gameState.activeQuestionIndex = Math.min(record.answers.length, bookData.questions.length - 1);
+      }
+
+      sfx.playInteract();
+      renderQuizQuestion();
+      quizModal.classList.remove('hidden');
+    }
+
+    function renderQuizQuestion() {
+      const bookData = bookGroups.find((b) => b.id === gameState.activeBookId);
+      if (!bookData) return;
+
+      const record = gameState.completedBooks[bookData.id];
+      const qIdx = gameState.activeQuestionIndex;
+      const qObj = bookData.questions[qIdx];
+      const totalInBook = bookData.questions.length;
+
+      quizTopicBadge.textContent = `${bookData.title} • ${bookData.locationLabel}`;
+      quizBookTitle.textContent = `${bookData.title} (${bookData.rangeLabel})`;
+      quizQCounter.textContent = `${qIdx + 1} / ${totalInBook}`;
+      quizQuestionOriginId.textContent = `ID Soal: ${qObj.id}`;
+      quizQuestionTopic.textContent = `Materi: ${qObj.topic}`;
+      quizQuestionText.textContent = qObj.question;
+
+      quizOptionsContainer.innerHTML = '';
+      quizFeedbackBox.classList.add('hidden');
+      btnNextQuestion.classList.add('hidden');
+
+      const existingAnswer = record.answers[qIdx];
+      const isAlreadyAnswered = Boolean(existingAnswer);
+      gameState.hasAnsweredCurrent = isAlreadyAnswered;
+
+      const optionLetters = ['A', 'B', 'C', 'D', 'E'];
+
+      qObj.options.forEach((optText, optIdx) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = "w-full text-left p-3.5 rounded-2xl border-2 border-slate-200 hover:border-blue-500 hover:bg-blue-50/60 transition flex items-start gap-3 cursor-pointer";
+
+        btn.innerHTML = `
+          <span class="w-7 h-7 rounded-lg bg-slate-100 text-slate-700 font-extrabold text-xs flex items-center justify-center shrink-0 mt-0.5">${optionLetters[optIdx] || (optIdx + 1)}</span>
+          <span class="text-xs sm:text-sm font-semibold text-slate-800 leading-snug">${optText}</span>
+        `;
+
+        if (isAlreadyAnswered) {
+          btn.disabled = true;
+          btn.classList.remove('hover:border-blue-500', 'hover:bg-blue-50/60', 'cursor-pointer');
+          if (optIdx === qObj.correctIndex) {
+            btn.classList.add('border-emerald-500', 'bg-emerald-50');
+          } else if (optIdx === existingAnswer.selectedIndex && !existingAnswer.isCorrect) {
+            btn.classList.add('border-rose-500', 'bg-rose-50');
+          } else {
+            btn.classList.add('opacity-60');
+          }
+        } else {
+          btn.addEventListener('click', () => handleSelectOption(optIdx));
+        }
+
+        quizOptionsContainer.appendChild(btn);
+      });
+
+      if (isAlreadyAnswered) {
+        showQuestionFeedback(existingAnswer.isCorrect, qObj.explanation);
+        btnNextLabel.textContent = qIdx + 1 < totalInBook ? "Soal Berikutnya" : "Selesaikan Buku";
+        btnNextQuestion.classList.remove('hidden');
+      }
+    }
+
+    function showQuestionFeedback(isCorrect, explanation) {
+      quizFeedbackBox.classList.remove('hidden', 'bg-emerald-50', 'border-emerald-200', 'bg-rose-50', 'border-rose-200');
+      if (isCorrect) {
+        quizFeedbackBox.classList.add('bg-emerald-50', 'border-emerald-200');
+        quizFeedbackTitle.innerHTML = `<span class="text-emerald-700">✅ Jawaban Tepat! (+${Math.round(getPointsPerQuestion() * 10) / 10} Poin)</span>`;
+      } else {
+        quizFeedbackBox.classList.add('bg-rose-50', 'border-rose-200');
+        quizFeedbackTitle.innerHTML = `<span class="text-rose-700">❌ Jawaban Kurang Tepat</span>`;
+      }
+      quizFeedbackDesc.textContent = explanation;
+    }
+
+    function handleSelectOption(selectedIndex) {
+      if (gameState.hasAnsweredCurrent) return;
+      gameState.hasAnsweredCurrent = true;
+
+      const bookData = bookGroups.find((b) => b.id === gameState.activeBookId);
+      const record = gameState.completedBooks[bookData.id];
+      const qIdx = gameState.activeQuestionIndex;
+      const qObj = bookData.questions[qIdx];
+
+      const isCorrect = selectedIndex === qObj.correctIndex;
+      if (isCorrect) {
+        record.correctCount += 1;
+        gameState.score = Math.min(100, gameState.score + getPointsPerQuestion());
+        sfx.playCorrect();
+      } else {
+        sfx.playWrong();
+      }
+
+      record.answers[qIdx] = {
+        questionId: qObj.id,
+        selectedIndex,
+        isCorrect
+      };
+
+      if (record.answers.length >= bookData.questions.length) {
+        record.completed = true;
+      }
+
+      updateHUD();
+      renderQuizQuestion();
+    }
+
+    btnNextQuestion.addEventListener('click', () => {
+      const bookData = bookGroups.find((b) => b.id === gameState.activeBookId);
+      if (!bookData) return;
+
+      if (gameState.activeQuestionIndex + 1 < bookData.questions.length) {
+        gameState.activeQuestionIndex += 1;
+        renderQuizQuestion();
+      } else {
+        quizModal.classList.add('hidden');
+        gameState.isModalOpen = false;
+        updateHUD();
+        if (getCompletedBooksCount() >= bookGroups.length) {
+          sfx.playVictory();
+        }
+      }
+    });
+
+    btnCloseQuiz.addEventListener('click', () => {
+      quizModal.classList.add('hidden');
+      gameState.isModalOpen = false;
+      updateHUD();
+    });
+
+    function triggerInteraction(target) {
+      if (!target) return;
+      if (target.type === 'iburia') {
+        openIbuRiaDialog();
+      } else if (target.type === 'book') {
+        openBookQuiz(target.bookData);
+      }
+    }
+
+    btnInteract.addEventListener('click', () => {
+      if (gameState.nearbyTarget) {
+        triggerInteraction(gameState.nearbyTarget);
+      }
+    });
+
+    /**
+     * 12. FINAL REPORT & GOOGLE SHEETS SUBMISSION
+     */
+    const reportModal = document.getElementById('report-modal');
+    const reportName = document.getElementById('report-name');
+    const reportClass = document.getElementById('report-class');
+    const reportScore = document.getElementById('report-score');
+    const reportPredicate = document.getElementById('report-predicate');
+    const reportBreakdown = document.getElementById('report-breakdown');
+    const btnSubmitTeacher = document.getElementById('btn-submit-teacher');
+    const btnSubmitLabel = document.getElementById('btn-submit-label');
+    const iconSubmitSend = document.getElementById('icon-submit-send');
+    const iconSubmitSpinner = document.getElementById('icon-submit-spinner');
+    const submitStatusBox = document.getElementById('submit-status-box');
+
+    function openFinalReportModal() {
+      gameState.isModalOpen = true;
+      sfx.playVictory();
+
+      const finalScore = Math.round(gameState.score);
+      reportName.textContent = gameState.studentName;
+      reportClass.textContent = gameState.studentClass;
+      reportScore.textContent = finalScore;
+
+      if (finalScore >= 85) {
+        reportPredicate.textContent = "Sangat Kompeten";
+        reportPredicate.className = "inline-block text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 mt-0.5";
+      } else if (finalScore >= 70) {
+        reportPredicate.textContent = "Kompeten";
+        reportPredicate.className = "inline-block text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-700 mt-0.5";
+      } else {
+        reportPredicate.textContent = "Perlu Pendalaman";
+        reportPredicate.className = "inline-block text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-700 mt-0.5";
+      }
+
+      reportBreakdown.innerHTML = '';
+      bookGroups.forEach((b) => {
+        const rec = gameState.completedBooks[b.id] || { correctCount: 0 };
+        const row = document.createElement('div');
+        row.className = "flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs";
+        row.innerHTML = `
+          <div>
+            <span class="font-extrabold text-slate-800">${b.title}</span>
+            <span class="text-slate-500 ml-1.5">(${b.rangeLabel})</span>
+          </div>
+          <span class="font-extrabold text-blue-700">${rec.correctCount} / ${b.questions.length} Benar</span>
+        `;
+        reportBreakdown.appendChild(row);
+      });
+
+      reportModal.classList.remove('hidden');
+    }
+
+    btnSubmitTeacher.addEventListener('click', async () => {
+      if (gameState.hasSubmittedToTeacher) return;
+
+      const scriptUrl = resolveGoogleScriptUrl();
+      if (!scriptUrl) {
+        submitStatusBox.classList.remove('hidden', 'bg-emerald-50', 'border-emerald-200', 'text-emerald-800');
+        submitStatusBox.classList.add('bg-amber-50', 'border-amber-200', 'text-amber-800');
+        submitStatusBox.textContent = "⚠️ Link Google Sheet Guru belum dikonfigurasi pada Panel Guru.";
+        return;
+      }
+
+      btnSubmitTeacher.disabled = true;
+      iconSubmitSend.classList.add('hidden');
+      iconSubmitSpinner.classList.remove('hidden');
+      btnSubmitLabel.textContent = "Mengirim ke Google Sheet...";
+
+      const payload = {
+        timestamp: new Date().toISOString(),
+        teacherEmail: TEACHER_EMAIL,
+        studentName: gameState.studentName,
+        studentClass: gameState.studentClass,
+        avatarGender: gameState.avatarGender,
+        finalScore: Math.round(gameState.score),
+        totalQuestions: activeQuestionBank.length,
+        booksSummary: bookGroups.map((b) => ({
+          book: b.title,
+          range: b.rangeLabel,
+          correct: gameState.completedBooks[b.id]?.correctCount || 0,
+          total: b.questions.length
+        }))
+      };
+
+      try {
+        await fetch(scriptUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(payload)
+        });
+
+        gameState.hasSubmittedToTeacher = true;
+        iconSubmitSpinner.classList.add('hidden');
+        btnSubmitLabel.textContent = "Terkirim ke Ibu Ria ✓";
+        submitStatusBox.classList.remove('hidden', 'bg-amber-50', 'border-amber-200', 'text-amber-800');
+        submitStatusBox.classList.add('bg-emerald-50', 'border-emerald-200', 'text-emerald-800');
+        submitStatusBox.textContent = `✅ Hasil nilai (${Math.round(gameState.score)}/100) berhasil dikirim ke Google Sheet Guru!`;
+        sfx.playVictory();
+      } catch (err) {
+        btnSubmitTeacher.disabled = false;
+        iconSubmitSpinner.classList.add('hidden');
+        iconSubmitSend.classList.remove('hidden');
+        btnSubmitLabel.textContent = "Coba Kirim Ulang";
+        submitStatusBox.classList.remove('hidden');
+        submitStatusBox.classList.add('bg-rose-50', 'border-rose-200', 'text-rose-800');
+        submitStatusBox.textContent = "❌ Gagal mengirim data. Periksa koneksi internet lalu coba lagi.";
+      }
+    });
+
+    // Audio Mute Toggle
+    const btnToggleAudio = document.getElementById('btn-toggle-audio');
+    const iconSoundOn = document.getElementById('icon-sound-on');
+    const iconSoundOff = document.getElementById('icon-sound-off');
+    btnToggleAudio.addEventListener('click', () => {
+      const muted = sfx.toggleMute();
+      iconSoundOn.classList.toggle('hidden', muted);
+      iconSoundOff.classList.toggle('hidden', !muted);
+    });
+
+    /**
+     * 13. MINI RADAR & WORLD 2D FLOATING LABELS
+     */
+    const radarCanvas = document.getElementById('radar-canvas');
+    const radarCtx = radarCanvas ? radarCanvas.getContext('2d') : null;
+
+    function renderMiniRadar() {
+      if (!radarCtx) return;
+      const w = radarCanvas.width;
+      const h = radarCanvas.height;
+      const cx = w / 2;
+      const cy = h / 2;
+      const scale = 1.45;
+
+      radarCtx.clearRect(0, 0, w, h);
+      radarCtx.fillStyle = "#0F172A";
+      radarCtx.fillRect(0, 0, w, h);
+
+      // Grid rings
+      radarCtx.strokeStyle = "rgba(148, 163, 184, 0.18)";
+      radarCtx.lineWidth = 1;
+      [18, 36, 52].forEach((r) => {
+        radarCtx.beginPath();
+        radarCtx.arc(cx, cy, r, 0, Math.PI * 2);
+        radarCtx.stroke();
+      });
+
+      const px = player.root.position.x;
+      const pz = player.root.position.z;
+
+      function toRadarXY(wx, wz) {
+        const dx = (wx - px) * scale;
+        const dz = (wz - pz) * scale;
+        const cos = Math.cos(-cameraYaw);
+        const sin = Math.sin(-cameraYaw);
+        const rx = cx + (dx * cos - dz * sin);
+        const ry = cy - (dx * sin + dz * cos);
+        return {
+          x: Math.max(6, Math.min(w - 6, rx)),
+          y: Math.max(6, Math.min(h - 6, ry))
+        };
+      }
+
+      // Ibu Ria marker (rose)
+      const ibuPt = toRadarXY(IBU_RIA_CONFIG.position.x, IBU_RIA_CONFIG.position.z);
+      radarCtx.fillStyle = "#FB7185";
+      radarCtx.beginPath();
+      radarCtx.arc(ibuPt.x, ibuPt.y, 4.2, 0, Math.PI * 2);
+      radarCtx.fill();
+
+      // Book Symbols (amber if active, emerald if done)
+      bookEntities.forEach((ent) => {
+        const bPt = toRadarXY(ent.data.position.x, ent.data.position.z);
+        const done = Boolean(gameState.completedBooks[ent.data.id]?.completed);
+        radarCtx.fillStyle = done ? "#34D399" : "#FBBF24";
+        radarCtx.beginPath();
+        radarCtx.arc(bPt.x, bPt.y, 3.5, 0, Math.PI * 2);
+        radarCtx.fill();
+      });
+
+      // Classroom Peers (violet)
+      remotePlayers.forEach((entry) => {
+        const rPt = toRadarXY(entry.charObj.root.position.x, entry.charObj.root.position.z);
+        radarCtx.fillStyle = "#A78BFA";
+        radarCtx.beginPath();
+        radarCtx.arc(rPt.x, rPt.y, 3.2, 0, Math.PI * 2);
+        radarCtx.fill();
+      });
+
+      // Local Player Center Arrow
+      radarCtx.fillStyle = "#38BDF8";
+      radarCtx.beginPath();
+      radarCtx.arc(cx, cy, 4, 0, Math.PI * 2);
+      radarCtx.fill();
+    }
+
+    function updateWorldFloatingLabels() {
+      const ibuScreen = projectToScreen(new BABYLON.Vector3(IBU_RIA_CONFIG.position.x, 2.65, IBU_RIA_CONFIG.position.z));
+      const ibuDist = Math.hypot(player.root.position.x - IBU_RIA_CONFIG.position.x, player.root.position.z - IBU_RIA_CONFIG.position.z);
+      if (ibuScreen.visible && ibuDist < 42) {
+        ibuRiaLabelEl.style.opacity = "1";
+        ibuRiaLabelEl.style.transform = `translate(${ibuScreen.x}px, ${ibuScreen.y}px) translate(-50%, -100%)`;
+      } else {
+        ibuRiaLabelEl.style.opacity = "0";
+      }
+
+      bookEntities.forEach((ent) => {
+        const bPos = new BABYLON.Vector3(ent.data.position.x, 2.35, ent.data.position.z);
+        const scr = projectToScreen(bPos);
+        const dist = Math.hypot(player.root.position.x - ent.data.position.x, player.root.position.z - ent.data.position.z);
+        if (scr.visible && dist < 38) {
+          ent.labelEl.style.opacity = "1";
+          ent.labelEl.style.transform = `translate(${scr.x}px, ${scr.y}px) translate(-50%, -100%)`;
+        } else {
+          ent.labelEl.style.opacity = "0";
+        }
+      });
+
+      remotePlayers.forEach((entry) => {
+        const pPos = new BABYLON.Vector3(entry.charObj.root.position.x, 2.55, entry.charObj.root.position.z);
+        const scr = projectToScreen(pPos);
+        if (scr.visible) {
+          entry.labelEl.style.opacity = "1";
+          entry.labelEl.style.transform = `translate(${scr.x}px, ${scr.y}px) translate(-50%, -100%)`;
+        } else {
+          entry.labelEl.style.opacity = "0";
+        }
+      });
+    }
+
+    /**
+     * 14. MAIN BABYLON.JS RENDER & GAME LOOP
+     */
+    let elapsedTime = 0;
+    let walkPhase = 0;
+    let currentSpeed = 0;
+    let verticalVel = 0;
+    let jumpOffset = 0;
+    let isGrounded = true;
+
+    function triggerPlayerJump() {
+      if (!gameState.isPlaying || gameState.isModalOpen || !isGrounded) return;
+      isGrounded = false;
+      verticalVel = 7.4;
+      sfx.playTone(340, 'sine', 0.14, 0.08, 0);
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Space') {
+        triggerPlayerJump();
+      }
+    });
+
+    const btnTouchJump = document.getElementById('btn-touch-jump');
+    if (btnTouchJump) {
+      btnTouchJump.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        triggerPlayerJump();
+      }, { passive: false });
+      btnTouchJump.addEventListener('click', triggerPlayerJump);
+    }
+
+    function projectToScreen(vec3) {
+      const engineWidth = engine.getRenderWidth();
+      const engineHeight = engine.getRenderHeight();
+      const viewport = camera.viewport.toGlobal(engineWidth, engineHeight);
+      const projected = BABYLON.Vector3.Project(
+        vec3,
+        BABYLON.Matrix.Identity(),
+        scene.getTransformMatrix(),
+        viewport
+      );
+      const dpr = engine.getHardwareScalingLevel();
+      return {
+        x: projected.x * dpr,
+        y: projected.y * dpr,
+        visible: projected.z >= 0 && projected.z <= 1
+      };
+    }
+
+    scene.onBeforeRenderObservable.add(() => {
+      const dt = Math.min(engine.getDeltaTime() / 1000, 0.05);
+      elapsedTime += dt;
+
+      // Subtle atmospheric cloud drift
+      skyDome.rotation.y += dt * 0.004;
+
+      // Gentle Wind Sway on Campus Grass Tufts
+      for (let g = 0; g < grassBlades.length; g++) {
+        const gb = grassBlades[g];
+        gb.node.rotation.z = Math.sin(elapsedTime * gb.speed + gb.phase) * 0.08;
+        gb.node.rotation.x = Math.cos(elapsedTime * gb.speed * 0.8 + gb.phase) * 0.05;
+      }
+
+      // Animate Ibu Ria Idle & Beacon
+      ibuRiaBeacon.rotation.y += dt * 2.2;
+      ibuRiaBeacon.position.y = 2.95 + Math.sin(elapsedTime * 3.2) * 0.12;
+      ibuRiaChar.root.position.y = 0.04 + Math.sin(elapsedTime * 2.1) * 0.012;
+      ibuRiaChar.leftArmPivot.rotation.z = 0.06 + Math.sin(elapsedTime * 1.9) * 0.02;
+      ibuRiaChar.rightArmPivot.rotation.z = -0.06 - Math.sin(elapsedTime * 1.9) * 0.02;
+
+      // Animate Floating 3D Open Book Symbols
+      bookEntities.forEach((ent, idx) => {
+        ent.booksHolder.rotation.y += dt * 1.15;
+        ent.booksHolder.position.y = 1.48 + Math.sin(elapsedTime * 2.6 + idx) * 0.14;
+      });
+
+      // Interpolate Remote Classroom Players & Clean Stale Peers
+      const nowMs = Date.now();
+      remotePlayers.forEach((entry, peerId) => {
+        if (nowMs - entry.lastSeen > 12000) {
+          removeRemotePeer(peerId);
+          return;
+        }
+        const prevX = entry.charObj.root.position.x;
+        const prevZ = entry.charObj.root.position.z;
+        entry.charObj.root.position = BABYLON.Vector3.Lerp(entry.charObj.root.position, entry.targetPos, Math.min(1, dt * 10));
+
+        let diff = entry.targetRotY - entry.charObj.root.rotation.y;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        entry.charObj.root.rotation.y += diff * Math.min(1, dt * 10);
+
+        const stepDist = Math.hypot(entry.charObj.root.position.x - prevX, entry.charObj.root.position.z - prevZ);
+        if (entry.isMoving || stepDist > 0.008) {
+          const swing = Math.sin(elapsedTime * 11) * 0.55;
+          entry.charObj.leftLegPivot.rotation.x = swing;
+          entry.charObj.rightLegPivot.rotation.x = -swing;
+          entry.charObj.leftKneePivot.rotation.x = Math.max(0, -swing) * 0.85;
+          entry.charObj.rightKneePivot.rotation.x = Math.max(0, swing) * 0.85;
+          entry.charObj.leftArmPivot.rotation.x = -swing * 0.75;
+          entry.charObj.rightArmPivot.rotation.x = swing * 0.75;
+          entry.charObj.leftElbowPivot.rotation.x = -0.25 - Math.max(0, swing) * 0.55;
+          entry.charObj.rightElbowPivot.rotation.x = -0.25 - Math.max(0, -swing) * 0.55;
+        } else {
+          entry.charObj.leftLegPivot.rotation.x *= 0.8;
+          entry.charObj.rightLegPivot.rotation.x *= 0.8;
+          entry.charObj.leftKneePivot.rotation.x *= 0.8;
+          entry.charObj.rightKneePivot.rotation.x *= 0.8;
+          entry.charObj.leftArmPivot.rotation.x *= 0.8;
+          entry.charObj.rightArmPivot.rotation.x *= 0.8;
+          entry.charObj.leftElbowPivot.rotation.x = BABYLON.Scalar.Lerp(entry.charObj.leftElbowPivot.rotation.x, -0.22, 0.2);
+          entry.charObj.rightElbowPivot.rotation.x = BABYLON.Scalar.Lerp(entry.charObj.rightElbowPivot.rotation.x, -0.22, 0.2);
+        }
+      });
+
+      if (!gameState.isPlaying) {
+        const angle = elapsedTime * 0.16;
+        camera.position.set(Math.sin(angle) * 26, 13, Math.cos(angle) * 26);
+        camera.setTarget(new BABYLON.Vector3(0, 2, -3));
+        return;
+      }
+
+      // Player Movement with Smooth Acceleration & Deceleration
+      let moveForward = 0;
+      let moveRight = 0;
+      let isMoving = false;
+      const maxSpeed = 8.4;
+
+      if (!gameState.isModalOpen) {
+        if (keys.w || keys.ArrowUp) moveForward += 1;
+        if (keys.s || keys.ArrowDown) moveForward -= 1;
+        if (keys.d || keys.ArrowRight) moveRight += 1;
+        if (keys.a || keys.ArrowLeft) moveRight -= 1;
+
+        if (Math.abs(touchMove.x) > 0.08 || Math.abs(touchMove.z) > 0.08) {
+          moveRight += touchMove.x;
+          moveForward -= touchMove.z;
+        }
+      }
+
+      const inputLen = Math.hypot(moveForward, moveRight);
+      if (inputLen > 0.01) {
+        isMoving = true;
+        moveForward /= inputLen;
+        moveRight /= inputLen;
+        currentSpeed = BABYLON.Scalar.Lerp(currentSpeed, maxSpeed, Math.min(1, dt * 11));
+
+        const forwardVec = new BABYLON.Vector3(Math.sin(cameraYaw), 0, Math.cos(cameraYaw));
+        const rightVec = new BABYLON.Vector3(Math.cos(cameraYaw), 0, -Math.sin(cameraYaw));
+
+        const moveDir = forwardVec.scale(moveForward).add(rightVec.scale(moveRight)).normalize();
+        const nextX = player.root.position.x + moveDir.x * currentSpeed * dt;
+        const nextZ = player.root.position.z + moveDir.z * currentSpeed * dt;
+
+        if (!checkCollision(nextX, player.root.position.z)) player.root.position.x = nextX;
+        if (!checkCollision(player.root.position.x, nextZ)) player.root.position.z = nextZ;
+
+        const targetRotY = Math.atan2(moveDir.x, moveDir.z);
+        let rotDiff = targetRotY - player.root.rotation.y;
+        while (rotDiff > Math.PI) rotDiff -= Math.PI * 2;
+        while (rotDiff < -Math.PI) rotDiff += Math.PI * 2;
+        player.root.rotation.y += rotDiff * Math.min(1, dt * 14);
+
+        // Subtle athletic lean into turns
+        player.root.rotation.z = BABYLON.Scalar.Lerp(player.root.rotation.z, -rotDiff * 0.14, Math.min(1, dt * 10));
+      } else {
+        currentSpeed = BABYLON.Scalar.Lerp(currentSpeed, 0, Math.min(1, dt * 14));
+        player.root.rotation.z = BABYLON.Scalar.Lerp(player.root.rotation.z, 0, Math.min(1, dt * 10));
+      }
+
+      // Jump Physics
+      if (!isGrounded) {
+        verticalVel -= 20.5 * dt;
+        jumpOffset += verticalVel * dt;
+        if (jumpOffset <= 0) {
+          jumpOffset = 0;
+          verticalVel = 0;
+          isGrounded = true;
+        }
+      }
+
+      // Organic Joint Animation (Jump, Walk/Run Cycle, or Idle)
+      if (!isGrounded) {
+        player.leftLegPivot.rotation.x = 0.35;
+        player.rightLegPivot.rotation.x = -0.25;
+        player.leftKneePivot.rotation.x = 0.55;
+        player.rightKneePivot.rotation.x = 0.35;
+        player.leftArmPivot.rotation.x = -0.55;
+        player.rightArmPivot.rotation.x = -0.55;
+        player.root.position.y = 0.04 + jumpOffset;
+      } else if (isMoving) {
+        const speedRatio = Math.min(1, currentSpeed / maxSpeed);
+        walkPhase += dt * (7.5 + 4.5 * speedRatio);
+        const swing = Math.sin(walkPhase) * (0.60 * speedRatio);
+        player.leftLegPivot.rotation.x = swing;
+        player.rightLegPivot.rotation.x = -swing;
+        player.leftKneePivot.rotation.x = Math.max(0, -swing) * 0.85;
+        player.rightKneePivot.rotation.x = Math.max(0, swing) * 0.85;
+        player.leftArmPivot.rotation.x = -swing * 0.80;
+        player.rightArmPivot.rotation.x = swing * 0.80;
+        player.leftElbowPivot.rotation.x = -0.25 - Math.max(0, swing) * 0.55;
+        player.rightElbowPivot.rotation.x = -0.25 - Math.max(0, -swing) * 0.55;
+        player.headGroup.rotation.y = Math.sin(walkPhase * 0.5) * 0.05;
+        player.root.position.y = 0.04 + Math.abs(Math.sin(walkPhase)) * (0.045 * speedRatio);
+      } else {
+        walkPhase = 0;
+        player.leftLegPivot.rotation.x *= 0.8;
+        player.rightLegPivot.rotation.x *= 0.8;
+        player.leftKneePivot.rotation.x *= 0.8;
+        player.rightKneePivot.rotation.x *= 0.8;
+        player.leftArmPivot.rotation.x *= 0.8;
+        player.rightArmPivot.rotation.x *= 0.8;
+        player.leftElbowPivot.rotation.x = BABYLON.Scalar.Lerp(player.leftElbowPivot.rotation.x, -0.22, 0.2);
+        player.rightElbowPivot.rotation.x = BABYLON.Scalar.Lerp(player.rightElbowPivot.rotation.x, -0.22, 0.2);
+        player.headGroup.rotation.y *= 0.85;
+        player.root.position.y = 0.04 + Math.sin(elapsedTime * 2.2) * 0.012;
+      }
+
+      broadcastMyState(isMoving);
+
+      // Smooth Third-Person Follow Camera (Decoupled from micro step bounce)
+      const camDist = 7.4;
+      const stableBaseY = 0.04 + jumpOffset;
+      const desiredCamX = player.root.position.x - Math.sin(cameraYaw) * Math.cos(cameraPitch) * camDist;
+      const desiredCamZ = player.root.position.z - Math.cos(cameraYaw) * Math.cos(cameraPitch) * camDist;
+      const desiredCamY = stableBaseY + 2.3 + Math.sin(cameraPitch) * camDist;
+
+      camera.position = BABYLON.Vector3.Lerp(
+        camera.position,
+        new BABYLON.Vector3(desiredCamX, desiredCamY, desiredCamZ),
+        Math.min(1, dt * 12)
+      );
+      camera.setTarget(new BABYLON.Vector3(
+        player.root.position.x,
+        stableBaseY + 1.55,
+        player.root.position.z
+      ));
+
+      // Proximity Detection (Ibu Ria + Active Book Symbols)
+      let closestTarget = null;
+      let minDist = 3.6;
+
+      const distToIbuRia = Math.hypot(
+        player.root.position.x - IBU_RIA_CONFIG.position.x,
+        player.root.position.z - IBU_RIA_CONFIG.position.z
+      );
+      if (distToIbuRia < minDist) {
+        minDist = distToIbuRia;
+        closestTarget = {
+          type: 'iburia',
+          promptLabel: getCompletedBooksCount() >= bookGroups.length
+            ? "Kumpulkan Jawaban ke Ibu Ria"
+            : "Bicara dengan Ibu Ria"
+        };
+      }
+
+      bookEntities.forEach((ent) => {
+        const d = Math.hypot(
+          player.root.position.x - ent.data.position.x,
+          player.root.position.z - ent.data.position.z
+        );
+        if (d < minDist) {
+          minDist = d;
+          const isDone = Boolean(gameState.completedBooks[ent.data.id]?.completed);
+          closestTarget = {
+            type: 'book',
+            bookData: ent.data,
+            promptLabel: isDone
+              ? `Lihat Kembali ${ent.data.title}`
+              : `Buka ${ent.data.title} (${ent.data.rangeLabel})`
+          };
+        }
+      });
+
+      gameState.nearbyTarget = closestTarget;
+      if (closestTarget && !gameState.isModalOpen) {
+        interactionText.textContent = closestTarget.promptLabel;
+        interactionPrompt.classList.remove('hidden');
+      } else {
+        interactionPrompt.classList.add('hidden');
+      }
+
+      updateWorldFloatingLabels();
+      renderMiniRadar();
+    });
+
+    // Apply initial Ultra quality & run render loop
+    applyGraphicsQuality("ULTRA");
+    engine.runRenderLoop(() => {
+      scene.render();
+    });
+
+    window.addEventListener('resize', () => {
+      engine.resize();
+    });
+  </script>
+</body>
+</html>
